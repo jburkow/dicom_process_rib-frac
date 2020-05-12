@@ -2,7 +2,7 @@
 Filename: dicom_crop_and_equalize.py
 Author: Jonathan Burkow, burkowjo@msu.edu
         Michigan State University
-Last Updated: 04/14/2020
+Last Updated: 05/12/2020
 Description: Loops through the list of DICOM files
     with image information and crops the image, and
     performs histogram equalization. Versions of the
@@ -16,44 +16,30 @@ from pydicom import dcmread
 import os
 import time
 from dicom_utils import load_dicom_image, crop_dicom, hist_equalization, create_rgb, image_scale_to_8bit, save_to_png
+import args
 
-# Set current day string
-timestr = time.strftime("%Y%m%d")
+# Print out start of execution
+print('Starting execution...')
+start_time = time.time()
 
-# Set arguments
-ARGS = {'break' : False,
-        'SAVE_FOLDER' : 'fracture_present_1Feb2020_{}'.format(timestr),
-        '8_BIT_FOLDER' : '8bit_images',
-        '16_BIT_FOLDER' : '16bit_images',
-        'ORIGINAL_IMAGE_FOLDER' : 'original_png',
-        'CROPPED_IMAGE_FOLDER' : 'cropped_png',
-        'EQUALIZED_IMAGE_FOLDER' : 'crop_histeq_png',
-        'OFFSET_FILENAME' : 'dicom_offsets.csv'}
-
-# Set path to the data folder
-if platform.system() == 'Windows': # Local Laptop directory
-    ARGS['DATA_PATH'] = os.path.join('C:\\Users\\JonathanBurkow\\Documents\\Research\\rib_fracture_detection\\', ARGS['SAVE_FOLDER'])
-elif platform.system() == 'Linux': # CookieMonster directory
-    ARGS['DATA_PATH'] = ''
-    
-# Make sure data path exists
-if not os.path.isdir(ARGS['DATA_PATH']):
-    os.mkdir(ARGS['DATA_PATH'])
+# Make sure path to save processed images exists
+if not os.path.isdir(args.ARGS['PROCESSED_SAVE_FOLDER']):
+    os.mkdir(args.ARGS['PROCESSED_SAVE_FOLDER'])
 
 # Set up 8 bit folder paths
-folder_8bit = os.path.join(ARGS['DATA_PATH'], ARGS['8_BIT_FOLDER'])
-original_8bit_folder = os.path.join(folder_8bit, ARGS['ORIGINAL_IMAGE_FOLDER'])
-cropped_8bit_folder = os.path.join(folder_8bit, ARGS['CROPPED_IMAGE_FOLDER'])
-equalized_8bit_folder = os.path.join(folder_8bit, ARGS['EQUALIZED_IMAGE_FOLDER'])
+folder_8bit = os.path.join(args.ARGS['BASE_DATA_PATH'], args.ARGS['PROCESSED_SAVE_FOLDER'], args.ARGS['8_BIT_FOLDER'])
+original_8bit_folder = os.path.join(folder_8bit, args.ARGS['ORIGINAL_IMAGE_FOLDER'])
+cropped_8bit_folder = os.path.join(folder_8bit, args.ARGS['CROPPED_IMAGE_FOLDER'])
+equalized_8bit_folder = os.path.join(folder_8bit, args.ARGS['EQUALIZED_IMAGE_FOLDER'])
 
 # Set up 16 bit folder paths
-folder_16bit = os.path.join(ARGS['DATA_PATH'], ARGS['16_BIT_FOLDER'])
-original_16bit_folder = os.path.join(folder_16bit, ARGS['ORIGINAL_IMAGE_FOLDER'])
-cropped_16bit_folder = os.path.join(folder_16bit, ARGS['CROPPED_IMAGE_FOLDER'])
-equalized_16bit_folder = os.path.join(folder_16bit, ARGS['EQUALIZED_IMAGE_FOLDER'])
+folder_16bit = os.path.join(args.ARGS['BASE_DATA_PATH'], args.ARGS['PROCESSED_SAVE_FOLDER'], args.ARGS['16_BIT_FOLDER'])
+original_16bit_folder = os.path.join(folder_16bit, args.ARGS['ORIGINAL_IMAGE_FOLDER'])
+cropped_16bit_folder = os.path.join(folder_16bit, args.ARGS['CROPPED_IMAGE_FOLDER'])
+equalized_16bit_folder = os.path.join(folder_16bit, args.ARGS['EQUALIZED_IMAGE_FOLDER'])
 
 # Offset file path -- rows are (IMG, X_OFFSET, Y_OFFSET)
-offset_filename = os.path.join(ARGS['DATA_PATH'], ARGS['OFFSET_FILENAME'])
+offset_filename = os.path.join(args.ARGS['BASE_DATA_PATH'], args.ARGS['PROCESSED_SAVE_FOLDER'], args.ARGS['OFFSET_FILENAME'])
     
 # Check for existence of folders
 if not os.path.isdir(folder_8bit):
@@ -74,19 +60,18 @@ if not os.path.isdir(cropped_16bit_folder):
 if not os.path.isdir(equalized_16bit_folder):
     os.mkdir(equalized_16bit_folder)
 
-# Print out start of execution
-print('Starting execution...')
-start_time = time.time()
 
 # Import the dataset list
+dicom_list_path = os.path.join(args.ARGS['BASE_DATA_PATH'], 'dicom_dataset.csv')
 dataset_list = []
-with open('dicom_dataset.csv', 'r') as data_file:
+with open(dicom_list_path, 'r') as data_file:
     for line in data_file:
         dataset_list.append(line.replace('\n', ''))
 
 # Import the annotated Instance UIDs
+instance_uids_path = os.path.join(args.ARGS['BASE_DATA_PATH'], args.ARGS['INSTANCE_UID_FILENAME'])
 instance_uids = []
-with open('Annotated_Instance_UIDs.csv', 'r') as data_file:
+with open(instance_uids_path, 'r') as data_file:
     for line in data_file:
         instance_uids.append(line.replace('\n', ''))
         
@@ -108,7 +93,7 @@ if not os.path.isdir(equalized_16bit_folder):
 # Loop through all dicom files and process all annotated instances
 offset_list = []
 for i, file in enumerate(dataset_list):
-    if ARGS['break'] and i == 15:
+    if args.ARGS['break'] and i == 15:
         break
         
     try:
