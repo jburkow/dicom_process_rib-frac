@@ -2,7 +2,7 @@
 Filename: dicom_crop_and_equalize.py
 Author: Jonathan Burkow, burkowjo@msu.edu
         Michigan State University
-Last Updated: 05/12/2020
+Last Updated: 05/18/2020
 Description: Loops through the list of DICOM files
     with image information and crops the image, and
     performs histogram equalization. Versions of the
@@ -62,7 +62,7 @@ if not os.path.isdir(equalized_16bit_folder):
 
 
 # Import the dataset list
-dicom_list_path = os.path.join(args.ARGS['BASE_DATA_PATH'], 'dicom_dataset.csv')
+dicom_list_path = os.path.join(args.ARGS['BASE_DATA_PATH'], args.ARGS['PROCESSED_SAVE_FOLDER'], 'dicom_dataset.csv')
 dataset_list = []
 with open(dicom_list_path, 'r') as data_file:
     for line in data_file:

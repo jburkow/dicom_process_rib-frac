@@ -2,7 +2,7 @@
 Filename: create_dicom_dataset_list.py
 Author: Jonathan Burkow, burkowjo@msu.edu
         Michigan State University
-Last Updated: 05/12/2020
+Last Updated: 05/18/2020
 Description: Goes through the provided dataset location of DICOM
     files and creates a file listing all which contain PixelData
     information.
