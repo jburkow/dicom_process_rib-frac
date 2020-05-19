@@ -18,9 +18,13 @@ import args
 print('Starting execution...')
 start_time = time.time()
 
-# Set paths for DICOM folder and CSV
-dicom_folder = os.path.join(args.ARGS['BASE_DATA_PATH'], args.ARGS['PROCESSED_SAVE_FOLDER'], args.ARGS['DICOM_FOLDER'])
-csv_path = os.path.join(args.ARGS['BASE_DATA_PATH'], 'dicom_dataset.csv')
+# Set paths for original DICOM folder and CSV
+dicom_folder = os.path.join(args.ARGS['BASE_DATA_PATH'], args.ARGS['DICOM_FOLDER'])
+csv_path = os.path.join(args.ARGS['BASE_DATA_PATH'], args.ARGS['PROCESSED_SAVE_FOLDER'], 'dicom_dataset.csv')
+
+# Check if the processed save folder exists
+if not os.path.isdir(os.path.join(args.ARGS['BASE_DATA_PATH'], args.ARGS['PROCESSED_SAVE_FOLDER'])):
+    os.mkdir(os.path.join(args.ARGS['BASE_DATA_PATH'], args.ARGS['PROCESSED_SAVE_FOLDER']))
 
 full_dataset_list = []
 has_image_dataset_list = []
