@@ -27,21 +27,18 @@ if not os.path.isdir(args.ARGS['PROCESSED_SAVE_FOLDER']):
     os.mkdir(args.ARGS['PROCESSED_SAVE_FOLDER'])
 
 # Set up 8 bit folder paths
-folder_8bit = os.path.join(args.ARGS['BASE_DATA_PATH'], args.ARGS['PROCESSED_SAVE_FOLDER'], args.ARGS['8_BIT_FOLDER'])
+folder_8bit = args.ARGS['8_BIT_FOLDER']
 original_8bit_folder = os.path.join(folder_8bit, args.ARGS['ORIGINAL_IMAGE_FOLDER'])
 cropped_8bit_folder = os.path.join(folder_8bit, args.ARGS['CROPPED_IMAGE_FOLDER'])
 equalized_8bit_folder = os.path.join(folder_8bit, args.ARGS['EQUALIZED_IMAGE_FOLDER'])
 
 # Set up 16 bit folder paths
-folder_16bit = os.path.join(args.ARGS['BASE_DATA_PATH'], args.ARGS['PROCESSED_SAVE_FOLDER'], args.ARGS['16_BIT_FOLDER'])
+folder_16bit = args.ARGS['16_BIT_FOLDER']
 original_16bit_folder = os.path.join(folder_16bit, args.ARGS['ORIGINAL_IMAGE_FOLDER'])
 cropped_16bit_folder = os.path.join(folder_16bit, args.ARGS['CROPPED_IMAGE_FOLDER'])
 equalized_16bit_folder = os.path.join(folder_16bit, args.ARGS['EQUALIZED_IMAGE_FOLDER'])
 
-# Offset file path -- rows are (IMG, X_OFFSET, Y_OFFSET)
-offset_filename = os.path.join(args.ARGS['BASE_DATA_PATH'], args.ARGS['PROCESSED_SAVE_FOLDER'], args.ARGS['OFFSET_FILENAME'])
-    
-# Check for existence of folders
+# Check for existence of 8-bit folders
 if not os.path.isdir(folder_8bit):
     os.mkdir(folder_8bit)
 if not os.path.isdir(original_8bit_folder):
@@ -50,7 +47,8 @@ if not os.path.isdir(cropped_8bit_folder):
     os.mkdir(cropped_8bit_folder)
 if not os.path.isdir(equalized_8bit_folder):
     os.mkdir(equalized_8bit_folder)
-    
+
+# Check for existence of 16-bit folders  
 if not os.path.isdir(folder_16bit):
     os.mkdir(folder_16bit)
 if not os.path.isdir(original_16bit_folder):
@@ -62,16 +60,14 @@ if not os.path.isdir(equalized_16bit_folder):
 
 
 # Import the dataset list
-dicom_list_path = os.path.join(args.ARGS['BASE_DATA_PATH'], args.ARGS['PROCESSED_SAVE_FOLDER'], 'dicom_dataset.csv')
 dataset_list = []
-with open(dicom_list_path, 'r') as data_file:
+with open(args.ARGS['DATASET_LIST'], 'r') as data_file:
     for line in data_file:
         dataset_list.append(line.replace('\n', ''))
 
 # Import the annotated Instance UIDs
-instance_uids_path = os.path.join(args.ARGS['BASE_DATA_PATH'], args.ARGS['INSTANCE_UID_FILENAME'])
 instance_uids = []
-with open(instance_uids_path, 'r') as data_file:
+with open(args.ARGS['INSTANCE_UID_FILENAME'], 'r') as data_file:
     for line in data_file:
         instance_uids.append(line.replace('\n', ''))
         
@@ -182,7 +178,8 @@ for i, file in enumerate(dataset_list):
 print('') # End print stream from loop
 
 # Export the list of offsets to a file
-with open(offset_filename, 'w') as out_file:
+# Rows are (IMG, X_OFFSET, Y_OFFSET)
+with open(args.ARGS['OFFSET_FILENAME'], 'w') as out_file:
     for line in offset_list:
         out_str = line + '\n'
         out_file.write(out_str)

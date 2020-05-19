@@ -2,7 +2,7 @@
 Filename: dicom_utils.py
 Author: Jonathan Burkow, burkowjo@msu.edu
         Michigan State University
-Last Updated: 04/08/2020
+Last Updated: 05/18/2020
 Description: A collection of utility functions needed
     to process through DICOM files, including thresholding,
     cropping, histogram equalization, and saving to PNGs.
@@ -11,9 +11,8 @@ Description: A collection of utility functions needed
 import numpy as np
 from pydicom import dcmread
 import matplotlib.pyplot as plt
-import skimage.filters as filters
 import cv2
-from skimage import exposure, color
+from skimage import exposure, color, filters
 import numpngw
 
 def invert_image(image):

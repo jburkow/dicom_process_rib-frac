@@ -18,18 +18,14 @@ import args
 print('Starting execution...')
 start_time = time.time()
 
-# Set paths for original DICOM folder and CSV
-dicom_folder = os.path.join(args.ARGS['BASE_DATA_PATH'], args.ARGS['DICOM_FOLDER'])
-csv_path = os.path.join(args.ARGS['BASE_DATA_PATH'], args.ARGS['PROCESSED_SAVE_FOLDER'], 'dicom_dataset.csv')
-
 # Check if the processed save folder exists
-if not os.path.isdir(os.path.join(args.ARGS['BASE_DATA_PATH'], args.ARGS['PROCESSED_SAVE_FOLDER'])):
-    os.mkdir(os.path.join(args.ARGS['BASE_DATA_PATH'], args.ARGS['PROCESSED_SAVE_FOLDER']))
+if not os.path.isdir(args.ARGS['PROCESSED_SAVE_FOLDER']):
+    os.mkdir(args.ARGS['PROCESSED_SAVE_FOLDER'])
 
 full_dataset_list = []
 has_image_dataset_list = []
 no_has_image_dataset_list = []
-for dirs, root, files in os.walk(dicom_folder):
+for dirs, root, files in os.walk(args.ARGS['DICOM_FOLDER']):
     for file in files:
         full_dataset_list.append(os.path.join(dirs,file))
 
@@ -46,7 +42,7 @@ print('DICOM files containing pixel data:', len(has_image_dataset_list))
 print('DICOM files without pixel data:', len(no_has_image_dataset_list))
 
 # Save the list of paths to DICOM files with pixel information to a file
-with open(csv_path, 'w') as out_file:
+with open(args.ARGS['DATASET_LIST'], 'w+') as out_file:
     for row in has_image_dataset_list:
         out_str = row + '\n'
         out_file.write(out_str)
