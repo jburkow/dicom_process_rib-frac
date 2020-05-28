@@ -22,10 +22,6 @@ import args
 print('Starting execution...')
 start_time = time.time()
 
-# Make sure path to save processed images exists
-if not os.path.isdir(args.ARGS['PROCESSED_SAVE_FOLDER']):
-    os.mkdir(args.ARGS['PROCESSED_SAVE_FOLDER'])
-
 # Set up 8 bit folder paths
 folder_8bit = args.ARGS['8_BIT_FOLDER']
 original_8bit_folder = os.path.join(folder_8bit, args.ARGS['ORIGINAL_IMAGE_FOLDER'])
