@@ -2,7 +2,7 @@
 Filename: create_dicom_dataset_list.py
 Author: Jonathan Burkow, burkowjo@msu.edu
         Michigan State University
-Last Updated: 05/18/2020
+Last Updated: 06/17/2020
 Description: Goes through the provided dataset location of DICOM
     files and creates a file listing all which contain PixelData
     information.
@@ -19,7 +19,7 @@ print('Starting execution...')
 start_time = time.time()
 
 # Check if the processed save folder exists
-if not os.path.isdir(args.ARGS['PROCESSED_SAVE_FOLDER']):
+if not os.path.isdir(args.ARGS['PROCESSED_SAVE_FOLDER']) and args.ARGS['NEW_PROCESS_FOLDER']:
     os.mkdir(args.ARGS['PROCESSED_SAVE_FOLDER'])
 
 full_dataset_list = []
