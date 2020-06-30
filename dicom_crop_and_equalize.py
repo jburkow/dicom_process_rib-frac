@@ -74,6 +74,7 @@ with open(args.ARGS['INSTANCE_UID_FILENAME'], 'r') as data_file:
 
 # Loop through all dicom files and process all annotated instances
 offset_list = []
+failed_list = []
 for i, file in enumerate(dataset_list):
     if args.ARGS['break'] and i == 15:
         break
@@ -166,10 +167,15 @@ for i, file in enumerate(dataset_list):
         save_to_png(cropped_histeq_16bit_rgb, cropped_histeq_16bit_path)
         
     except:
-        print('') # End print stream
-        print('Failed on image', filename)
+        failed_list.append(filename)
 
 print('') # End print stream from loop
+
+# Print out failed-to-process images:
+if len(failed_list) > 0:
+    print("Failed on", len(failed_list), "images:")
+    for img in failed_list:
+        print(img)
 
 # Export the list of offsets to a file
 # Rows are (IMG, X_OFFSET, Y_OFFSET)
