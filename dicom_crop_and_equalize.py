@@ -2,7 +2,7 @@
 Filename: dicom_crop_and_equalize.py
 Author: Jonathan Burkow, burkowjo@msu.edu
         Michigan State University
-Last Updated: 05/18/2020
+Last Updated: 06/29/2020
 Description: Loops through the list of DICOM files
     with image information and crops the image, and
     performs histogram equalization. Versions of the
@@ -25,35 +25,40 @@ start_time = time.time()
 # Set up 8 bit folder paths
 folder_8bit = args.ARGS['8_BIT_FOLDER']
 original_8bit_folder = os.path.join(folder_8bit, args.ARGS['ORIGINAL_IMAGE_FOLDER'])
+original_equalized_8bit_folder = os.path.join(folder_8bit, args.ARGS['ORIGINAL_EQUALIZED_IMAGE_FOLDER'])
 cropped_8bit_folder = os.path.join(folder_8bit, args.ARGS['CROPPED_IMAGE_FOLDER'])
-equalized_8bit_folder = os.path.join(folder_8bit, args.ARGS['EQUALIZED_IMAGE_FOLDER'])
+cropped_equalized_8bit_folder = os.path.join(folder_8bit, args.ARGS['CROPPED_EQUALIZED_IMAGE_FOLDER'])
 
 # Set up 16 bit folder paths
 folder_16bit = args.ARGS['16_BIT_FOLDER']
 original_16bit_folder = os.path.join(folder_16bit, args.ARGS['ORIGINAL_IMAGE_FOLDER'])
+original_equalized_16bit_folder = os.path.join(folder_16bit, args.ARGS['ORIGINAL_EQUALIZED_IMAGE_FOLDER'])
 cropped_16bit_folder = os.path.join(folder_16bit, args.ARGS['CROPPED_IMAGE_FOLDER'])
-equalized_16bit_folder = os.path.join(folder_16bit, args.ARGS['EQUALIZED_IMAGE_FOLDER'])
+cropped_equalized_16bit_folder = os.path.join(folder_16bit, args.ARGS['CROPPED_EQUALIZED_IMAGE_FOLDER'])
 
 # Check for existence of 8-bit folders
 if not os.path.isdir(folder_8bit):
     os.mkdir(folder_8bit)
 if not os.path.isdir(original_8bit_folder):
     os.mkdir(original_8bit_folder)
+if not os.path.isdir(original_equalized_8bit_folder):
+    os.mkdir(original_equalized_8bit_folder)
 if not os.path.isdir(cropped_8bit_folder):
     os.mkdir(cropped_8bit_folder)
-if not os.path.isdir(equalized_8bit_folder):
-    os.mkdir(equalized_8bit_folder)
+if not os.path.isdir(cropped_equalized_8bit_folder):
+    os.mkdir(cropped_equalized_8bit_folder)
 
 # Check for existence of 16-bit folders  
 if not os.path.isdir(folder_16bit):
     os.mkdir(folder_16bit)
 if not os.path.isdir(original_16bit_folder):
     os.mkdir(original_16bit_folder)
+if not os.path.isdir(original_equalized_16bit_folder):
+    os.mkdir(original_equalized_16bit_folder)
 if not os.path.isdir(cropped_16bit_folder):
     os.mkdir(cropped_16bit_folder)
-if not os.path.isdir(equalized_16bit_folder):
-    os.mkdir(equalized_16bit_folder)
-
+if not os.path.isdir(cropped_equalized_16bit_folder):
+    os.mkdir(cropped_equalized_16bit_folder)
 
 # Import the dataset list
 dataset_list = []
@@ -66,21 +71,6 @@ instance_uids = []
 with open(args.ARGS['INSTANCE_UID_FILENAME'], 'r') as data_file:
     for line in data_file:
         instance_uids.append(line.replace('\n', ''))
-        
-# Check for existence of folders
-if not os.path.isdir(original_8bit_folder):
-    os.mkdir(original_8bit_folder)
-if not os.path.isdir(cropped_8bit_folder):
-    os.mkdir(cropped_8bit_folder)
-if not os.path.isdir(equalized_8bit_folder):
-    os.mkdir(equalized_8bit_folder)
-    
-if not os.path.isdir(original_16bit_folder):
-    os.mkdir(original_16bit_folder)
-if not os.path.isdir(cropped_16bit_folder):
-    os.mkdir(cropped_16bit_folder)
-if not os.path.isdir(equalized_16bit_folder):
-    os.mkdir(equalized_16bit_folder)
 
 # Loop through all dicom files and process all annotated instances
 offset_list = []
@@ -94,7 +84,7 @@ for i, file in enumerate(dataset_list):
         # Grab filename
         filename = file[file.rfind('/')+1:file.rfind('_')]
 
-        # Check whether files already exist. If so, continue to next image
+        # Check whether files already exist in all 4 sub-folders. If so, continue to next image
         count_8bit = 0
         count_16bit = 0
         for root, dirs, files in os.walk(folder_8bit):
@@ -104,7 +94,7 @@ for i, file in enumerate(dataset_list):
             if filename + '.png' in files:
                 count_16bit += 1
 
-        if count_8bit == 3 and count_16bit == 3:
+        if count_8bit == 4 and count_16bit == 4:
             continue
 
         # Load in dicom file
@@ -123,49 +113,57 @@ for i, file in enumerate(dataset_list):
         cropped_image, offsets = crop_dicom(dcm)
 
         # Do histogram equalization on the cropped image
-        hist_eq_image = hist_equalization(cropped_image, method='skimage')
+        original_histeq_image = hist_equalization(original_image, method='skimage')
+        cropped_histeq_image = hist_equalization(cropped_image, method='skimage')
 
         # Append x and y index offsets to list
-
         x_offset = offsets[2]
         y_offset = offsets[0]
         offset_list.append(','.join([filename, str(x_offset), str(y_offset)]))
 
         # Create 8 bit versions of images
         original_8bit = image_scale_to_8bit(original_image)
+        original_histeq_8bit = image_scale_to_8bit(original_histeq_image)
         cropped_8bit = image_scale_to_8bit(cropped_image)
-        hist_eq_8bit = image_scale_to_8bit(hist_eq_image)
+        cropped_histeq_8bit = image_scale_to_8bit(cropped_histeq_image)
 
         original_8bit_rgb = create_rgb(original_8bit)
+        original_histeq_8bit_rgb = create_rgb(original_histeq_8bit)
         cropped_8bit_rgb = create_rgb(cropped_8bit)
-        hist_eq_8bit_rgb = create_rgb(hist_eq_8bit)
+        cropped_histeq_8bit_rgb = create_rgb(cropped_histeq_8bit)
 
         # Create 16 bit versions of images
         original_16bit = original_image.astype('uint16')
+        original_histeq_16bit = (original_histeq_image*(2**16 - 1)).astype('uint16')
         cropped_16bit = cropped_image.astype('uint16')
-        hist_eq_16bit = (hist_eq_image*(2**16 - 1)).astype('uint16')
+        cropped_histeq_16bit = (cropped_histeq_image*(2**16 - 1)).astype('uint16')
 
         original_16bit_rgb = create_rgb(original_16bit)
+        original_histeq_16bit_rgb = create_rgb(original_histeq_16bit)
         cropped_16bit_rgb = create_rgb(cropped_16bit)
-        hist_eq_16bit_rgb = create_rgb(hist_eq_16bit)
+        cropped_histeq_16bit_rgb = create_rgb(cropped_histeq_16bit)
 
         # Set the filenames for each image to save to
         original_8bit_path = os.path.join(original_8bit_folder, filename + '.png')
+        original_histeq_8bit_path = os.path.join(original_equalized_8bit_folder, filename + '.png')
         cropped_8bit_path = os.path.join(cropped_8bit_folder, filename + '.png')
-        hist_eq_8bit_path = os.path.join(equalized_8bit_folder, filename + '.png')
+        cropped_histeq_8bit_path = os.path.join(cropped_equalized_8bit_folder, filename + '.png')
 
         original_16bit_path = os.path.join(original_16bit_folder, filename + '.png')
+        original_histeq_16bit_path = os.path.join(original_equalized_16bit_folder, filename + '.png')
         cropped_16bit_path = os.path.join(cropped_16bit_folder, filename + '.png')
-        hist_eq_16bit_path = os.path.join(equalized_16bit_folder, filename + '.png')
+        cropped_histeq_16bit_path = os.path.join(cropped_equalized_16bit_folder, filename + '.png')
 
         # Save the images to their respective folders
         save_to_png(original_8bit_rgb, original_8bit_path)
+        save_to_png(original_histeq_8bit_rgb, original_histeq_8bit_path)
         save_to_png(cropped_8bit_rgb, cropped_8bit_path)
-        save_to_png(hist_eq_8bit_rgb, hist_eq_8bit_path)
+        save_to_png(cropped_histeq_8bit_rgb, cropped_histeq_8bit_path)
 
         save_to_png(original_16bit_rgb, original_16bit_path)
+        save_to_png(original_histeq_16bit_rgb, original_histeq_16bit_path)
         save_to_png(cropped_16bit_rgb, cropped_16bit_path)
-        save_to_png(hist_eq_16bit_rgb, hist_eq_16bit_path)
+        save_to_png(cropped_histeq_16bit_rgb, cropped_histeq_16bit_path)
         
     except:
         print('') # End print stream
