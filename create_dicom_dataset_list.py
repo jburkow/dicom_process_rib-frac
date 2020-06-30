@@ -33,12 +33,13 @@ for dirs, root, files in os.walk(args.ARGS['DICOM_FOLDER']):
 # Create list of annotated DICOM files
 annotated_dicoms = []
 for dcm_file in os.listdir(args.ARGS['DICOM_FOLDER']):
-    dcm = dcmread(os.path.join(args.ARGS['DICOM_FOLDER'], dcm_file))
+    file_path = os.path.join(args.ARGS['DICOM_FOLDER'], dcm_file)
+    dcm = dcmread(file_path)
 
     dcm_instance_uid = dcm.SOPInstanceUID
 
     if dcm_instance_uid in instance_uids:
-        annotated_dicoms.append(dcm_file)
+        annotated_dicoms.append(file_path)
         
 # Print out number of DICOM files and how many have pixel information
 print('Total number of DICOM files:', len(full_dataset_list))
