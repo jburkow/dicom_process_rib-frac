@@ -13,6 +13,7 @@ Description: Loops through the list of DICOM files
 import platform
 import numpy as np
 from pydicom import dcmread
+import csv
 import os
 import time
 from dicom_utils import load_dicom_image, crop_dicom, hist_equalization, create_rgb, image_scale_to_8bit, save_to_png
@@ -69,8 +70,9 @@ with open(args.ARGS['DATASET_LIST'], 'r') as data_file:
 # Import the annotated Instance UIDs
 instance_uids = []
 with open(args.ARGS['INSTANCE_UID_FILENAME'], 'r') as data_file:
-    for line in data_file:
-        instance_uids.append(line.replace('\n', ''))
+    csv_reader = csv.reader(data_file)
+    for line in csv_reader:
+        instance_uids.append(line[0])
 
 # Loop through all dicom files and process all annotated instances
 offset_list = []
