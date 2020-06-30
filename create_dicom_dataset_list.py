@@ -2,7 +2,7 @@
 Filename: create_dicom_dataset_list.py
 Author: Jonathan Burkow, burkowjo@msu.edu
         Michigan State University
-Last Updated: 06/29/2020
+Last Updated: 06/30/2020
 Description: Goes through the provided dataset location of DICOM
     files and creates a file listing all which have annotations.
 
@@ -14,6 +14,7 @@ Description: Goes through the provided dataset location of DICOM
 import platform
 import os
 from pydicom import dcmread
+import csv
 import time
 import args
 
@@ -22,7 +23,11 @@ print('Starting execution...')
 start_time = time.time()
 
 # Load in InstanceUIDs
-instance_uids = np.loadtxt('instance_uids.csv', delimiter=',', dtype=str, usecols=0)
+instance_uids = []
+with open(args.ARGS['INSTANCE_UID_FILENAME'], 'r') as data_file:
+    csv_reader = csv.reader(data_file)
+    for line in csv_reader:
+        instance_uids.append(line[0])
 
 # Create a list of all DICOM files
 full_dataset_list = []
