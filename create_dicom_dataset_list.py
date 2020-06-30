@@ -2,10 +2,13 @@
 Filename: create_dicom_dataset_list.py
 Author: Jonathan Burkow, burkowjo@msu.edu
         Michigan State University
-Last Updated: 06/17/2020
+Last Updated: 06/29/2020
 Description: Goes through the provided dataset location of DICOM
-    files and creates a file listing all which contain PixelData
-    information.
+    files and creates a file listing all which have annotations.
+
+    Note: This likely does not need to be run until more data
+    is added as the annotated DICOMs should remain the same
+    throughout multiple reads.
 '''
 
 import platform
@@ -18,32 +21,32 @@ import args
 print('Starting execution...')
 start_time = time.time()
 
-# Check if the processed save folder exists
-if not os.path.isdir(args.ARGS['PROCESSED_SAVE_FOLDER']) and args.ARGS['NEW_PROCESS_FOLDER']:
-    os.mkdir(args.ARGS['PROCESSED_SAVE_FOLDER'])
+# Load in InstanceUIDs
+instance_uids = np.loadtxt('instance_uids.csv', delimiter=',', dtype=str, usecols=0)
 
+# Create a list of all DICOM files
 full_dataset_list = []
-has_image_dataset_list = []
-no_has_image_dataset_list = []
 for dirs, root, files in os.walk(args.ARGS['DICOM_FOLDER']):
     for file in files:
         full_dataset_list.append(os.path.join(dirs,file))
 
-for item in full_dataset_list:
-    dcm = dcmread(item)
-    if hasattr(dcm, 'PixelData'):
-        has_image_dataset_list.append(item)
-    else:
-        no_has_image_dataset_list.append(item)
+# Create list of annotated DICOM files
+annotated_dicoms = []
+for dcm_file in os.listdir(args.ARGS['DICOM_FOLDER']):
+    dcm = dcmread(os.path.join(args.ARGS['DICOM_FOLDER'], dcm_file))
+
+    dcm_instance_uid = dcm.SOPInstanceUID
+
+    if dcm_instance_uid in instance_uids:
+        annotated_dicoms.append(dcm_file)
         
 # Print out number of DICOM files and how many have pixel information
 print('Total number of DICOM files:', len(full_dataset_list))
-print('DICOM files containing pixel data:', len(has_image_dataset_list))
-print('DICOM files without pixel data:', len(no_has_image_dataset_list))
+print('Annotated DICOM files:', len(annotated_dicoms))
 
 # Save the list of paths to DICOM files with pixel information to a file
 with open(args.ARGS['DATASET_LIST'], 'w+') as out_file:
-    for row in has_image_dataset_list:
+    for row in annotated_dicoms:
         out_str = row + '\n'
         out_file.write(out_str)
         
