@@ -125,10 +125,10 @@ for i, file in enumerate(dataset_list):
         offset_list.append(','.join([filename, str(x_offset), str(y_offset)]))
 
         # Create 8 bit versions of images
-        original_8bit = image_scale_to_8bit(original_image)
-        original_histeq_8bit = image_scale_to_8bit(original_histeq_image)
-        cropped_8bit = image_scale_to_8bit(cropped_image)
-        cropped_histeq_8bit = image_scale_to_8bit(cropped_histeq_image)
+        original_8bit = original_image.astype('uint8')
+        original_histeq_8bit = scale_image_to_depth(original_histeq_image, 8)
+        cropped_8bit = cropped_image.astype('uint8')
+        cropped_histeq_8bit = scale_image_to_depth(cropped_histeq_image, 8)
 
         original_8bit_rgb = create_rgb(original_8bit)
         original_histeq_8bit_rgb = create_rgb(original_histeq_8bit)
@@ -137,9 +137,9 @@ for i, file in enumerate(dataset_list):
 
         # Create 16 bit versions of images
         original_16bit = original_image.astype('uint16')
-        original_histeq_16bit = (original_histeq_image*(2**16 - 1)).astype('uint16')
+        original_histeq_16bit = scale_image_to_depth(original_histeq_image, 16)
         cropped_16bit = cropped_image.astype('uint16')
-        cropped_histeq_16bit = (cropped_histeq_image*(2**16 - 1)).astype('uint16')
+        cropped_histeq_16bit = scale_image_to_depth(cropped_histeq_image, 16)
 
         original_16bit_rgb = create_rgb(original_16bit)
         original_histeq_16bit_rgb = create_rgb(original_histeq_16bit)
