@@ -2,7 +2,7 @@
 Filename: dicom_utils.py
 Author: Jonathan Burkow, burkowjo@msu.edu
         Michigan State University
-Last Updated: 05/18/2020
+Last Updated: 07/15/2020
 Description: A collection of utility functions needed
     to process through DICOM files, including thresholding,
     cropping, histogram equalization, and saving to PNGs.
