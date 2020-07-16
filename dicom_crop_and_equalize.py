@@ -2,7 +2,7 @@
 Filename: dicom_crop_and_equalize.py
 Author: Jonathan Burkow, burkowjo@msu.edu
         Michigan State University
-Last Updated: 06/29/2020
+Last Updated: 07/15/2020
 Description: Loops through the list of DICOM files
     with image information and crops the image, and
     performs histogram equalization. Versions of the
@@ -16,8 +16,18 @@ from pydicom import dcmread
 import csv
 import os
 import time
+import sys
 from dicom_utils import load_dicom_image, crop_dicom, hist_equalization, create_rgb, image_scale_to_8bit, save_to_png
 import args
+
+# Determine whether to instantiate and load U-Net model based on command line argument
+if len(sys.argv) > 1 and sys.argv[1] == 'unet':
+    """LOAD UNET FUNCTION"""
+    # unet_model = Unet(...)
+    """LOAD IN WEIGHTS"""
+    # unet_model.load_weights(...)
+else:
+    unet_model = None
 
 # Print out start of execution
 print('Starting execution...')
@@ -78,9 +88,9 @@ with open(args.ARGS['INSTANCE_UID_FILENAME'], 'r') as data_file:
 offset_list = []
 failed_list = []
 for i, file in enumerate(dataset_list):
-    if args.ARGS['break'] and i == 15:
+    if args.ARGS['BREAK'] and i == args.ARGS['CROP_BREAK_NUM']:
         break
-        
+    
     try:
         print('Processing image {} of {} ({}%).'.format(i+1, len(dataset_list), round((i+1)/len(dataset_list)*100,1)), end='\r')
 
@@ -113,7 +123,7 @@ for i, file in enumerate(dataset_list):
 
         # Retrieve original and cropped image
         original_image = load_dicom_image(dcm)
-        cropped_image, offsets = crop_dicom(dcm)
+        cropped_image, offsets = crop_dicom(dcm, model=unet_model)
 
         # Do histogram equalization on the cropped image
         original_histeq_image = hist_equalization(original_image, method='skimage')
