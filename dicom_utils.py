@@ -473,7 +473,7 @@ def crop_dicom(dicom_file, mm_spacing=5, verbose=False, crop_region='center', mo
         the second stage of cropping
     model : Tensorflow model
         U-Net architecture model to use instance segmentation instead
-        of region crop
+        of region crop for second stage of cropping
     
     Returns
     -------
