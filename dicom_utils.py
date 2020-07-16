@@ -32,6 +32,16 @@ def invert_image(image):
 def create_rgb(image):
     """
     Stack the array to create a 3-channel RGB array.
+
+    Parameters
+    ----------
+    image : ndarray
+        single-channel array of the image
+
+    Returns
+    -------
+    image : ndarray
+        three-channel array of the image
     """
     # Stack the array three times for RGB channels
     image = np.stack([image, image, image], axis=-1)
@@ -54,7 +64,8 @@ def threshold_image(image, method='li', verbose=False):
     
     Returns
     -------
-    Returns the array of the image after the thresholding is applied
+    image : ndarray
+        array of the image after the thresholding is applied
     """
     # Find the threshold based on method
     if method == 'otsu':
@@ -73,7 +84,7 @@ def threshold_image(image, method='li', verbose=False):
     
     return image
 
-def rough_crop(image, blank_dist=10, verbose=False):
+def rough_crop(image, blank_dist=20, verbose=False):
     """
     The first stage of cropping for processing DICOM images.
     Taking in a numpy array representation of the DICOM image,
@@ -91,7 +102,10 @@ def rough_crop(image, blank_dist=10, verbose=False):
     
     Returns
     -------
-    indices : tuple containing the boundary indices for the rough crop
+    image : ndarray
+        array of the image after rough cropping is performed
+    indices : int (top, bottom, left, right)
+        tuple containing the boundary indices for the rough crop
     """
     # Extract image height and width
     h, w = image.shape[0], image.shape[1]
@@ -264,7 +278,7 @@ def get_quad_crop_offsets(image, verbose=False):
     Returns
     -------
     offsets : int (top, bottom, left, right)
-        pixel offsets
+        pixel offsets to constrict after rough crop
     """
     # Get the height and width of the quadrants
     quad_h, quad_w = image.shape[0]//2, image.shape[1]//2
@@ -321,7 +335,7 @@ def get_center_crop_offsets(image, verbose=False):
     Returns
     -------
     offsets : int (top, bottom, left, right)
-        pixel offsets
+        pixel offsets to constrict after rough crop
     """
     # Get the height and width of the center region
     center_h, center_w = image.shape[0]//2, image.shape[1]//2
@@ -364,6 +378,36 @@ def get_center_crop_offsets(image, verbose=False):
     
     return offsets
 
+def unet_crop(image, verbose=False):
+    """
+    Second stage option of cropping the DICOM image by using a trained U-Net network
+    to find an instance segmentation of the thoracic cavity and ribs and finding the
+    smallest and largest indices of those masks.
+    
+    Parameters
+    ----------
+    image : ndarray
+        array of the DICOM image after initial crop
+    verbose : bool
+        If True, print out the index offsets using center cropping
+        
+    Returns
+    -------
+    offsets : int (top, bottom, left, right)
+        pixel offsets to constrict after rough crop
+    """
+
+    '''ADD IN U-NET MODEL INFERENCING CODE'''
+
+    # Store the offsets
+    offsets = (top_bound, bottom_bound, left_bound, right_bound)
+    
+    # Print second stage crop offsets
+    if verbose:
+        print('U-Net segmentation crop offsets:', offsets)
+
+    return offsets
+
 def load_dicom_image(dicom_file, verbose=False):
     """
     Load in the image array from the dicom file.
@@ -380,18 +424,17 @@ def load_dicom_image(dicom_file, verbose=False):
     image : ndarray
         the image array
     """
-    # Pull out the image array from the dicom file
-    # If RGB, convert to grayscale first.
-    if dicom_file.PhotometricInterpretation == 'RGB':
-        image = color.rgb2gray(dicom_file.pixel_array.copy())
-    else:
-        image = dicom_file.pixel_array.copy()
-    
+    # Pull out the image array from the dicom file.
     # Depending on DICOM Photometric Interpretation value, invert the image.
+    # RGB : convert to 1-channel grayscale
     # MONOCHROME1 : values close to 0 appear white => invert
     # MONOCHROME2 : values close to 0 appear black => keep original
-    if dicom_file.PhotometricInterpretation == 'MONOCHROME1':
-        image = invert_image(image.astype('uint16'))
+    if dicom_file.PhotometricInterpretation == 'RGB':
+        image = color.rgb2gray(dicom_file.pixel_array.copy())
+    elif dicom_file.PhotometricInterpretation == 'MONOCHROME1':
+        image = invert_image(dicom_file.pixel_array.copy().astype('uint16'))
+    else:
+        image = dicom_file.pixel_array.copy()
     
     # Retrieve pixel intensity data from the dicom file
     # Rescale array values to ensure pixel intensities reflect original data
@@ -408,7 +451,7 @@ def load_dicom_image(dicom_file, verbose=False):
     
     return image.astype(float)
 
-def crop_dicom(dicom_file, mm_spacing=2, verbose=False, crop_region='center'):
+def crop_dicom(dicom_file, mm_spacing=5, verbose=False, crop_region='center', model=None):
     """
     Full function to crop a DICOM image. The pixel array is
     cropped through two stages: the first does a rough crop to center
@@ -422,12 +465,15 @@ def crop_dicom(dicom_file, mm_spacing=2, verbose=False, crop_region='center'):
         the DICOM file read in by PyDicom
     mm_spacing : int
         the physical spacing (in mm) to add around the borders
-        after the quadrant crop; determined by ImagerPixelSpacing
+        after the region crop; determined by ImagerPixelSpacing
     verbose : bool
         If True, print out each stage of image processing steps
     crop_region : str
         determine between quadrant or center regions to determine
         the second stage of cropping
+    model : Tensorflow model
+        U-Net architecture model to use instance segmentation instead
+        of region crop
     
     Returns
     -------
@@ -448,11 +494,14 @@ def crop_dicom(dicom_file, mm_spacing=2, verbose=False, crop_region='center'):
     # Get the indices for the rough crop stage
     image_copy, init_crop = rough_crop(image_copy, verbose=verbose)
     
-    # Get the index offsets from the region crop stage
-    if crop_region == 'quad':
-        region_offsets = get_quad_crop_offsets(image_copy, verbose=verbose)
-    elif crop_region == 'center':
-        region_offsets = get_center_crop_offsets(image_copy, verbose=verbose)
+    # Get the index offsets from the region crop stage or U-Net segmentation
+    if model is not None:
+        region_offsets = unet_crop(image_copy, verbose=verbose)
+    else:
+        if crop_region == 'quad':
+            region_offsets = get_quad_crop_offsets(image_copy, verbose=verbose)
+        elif crop_region == 'center':
+            region_offsets = get_center_crop_offsets(image_copy, verbose=verbose)
     
     # Calculate overall indices to crop the original image
     # If available, use ImagerPixelSpacing values for additional crop
@@ -484,7 +533,7 @@ def plot_image(image, cmap='gray', title='', axis=True):
 
 def save_to_png(image_array, save_loc):
     """
-    Save the image array to a 24-bit RGB PNG file.
+    Save the image array to a RGB PNG file.
     
     Parameters
     ----------
