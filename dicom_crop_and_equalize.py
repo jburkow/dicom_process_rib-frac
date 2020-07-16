@@ -19,13 +19,13 @@ import time
 import sys
 from dicom_utils import load_dicom_image, crop_dicom, hist_equalization, create_rgb, image_scale_to_8bit, save_to_png
 import args
+from unet import Unet
 
 # Determine whether to instantiate and load U-Net model based on command line argument
 if len(sys.argv) > 1 and sys.argv[1] == 'unet':
-    """LOAD UNET FUNCTION"""
-    # unet_model = Unet(...)
-    """LOAD IN WEIGHTS"""
-    # unet_model.load_weights(...)
+    # Instantiate U-Net model
+    unet_model = Unet(img_height=256, img_width=256, n_classes=8, n_filters=32)
+    unet_model.load_weights("aug_unet_256_32f_cce_071019_weights.h5")  # load weights
 else:
     unet_model = None
 
