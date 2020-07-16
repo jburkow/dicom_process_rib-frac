@@ -14,6 +14,7 @@ import matplotlib.pyplot as plt
 import cv2
 from skimage import exposure, color, filters
 import numpngw
+from unet_utils import to_binary, to_one_hot, postprocess, get_unet_offsets
 
 def invert_image(image):
     """
@@ -378,7 +379,7 @@ def get_center_crop_offsets(image, verbose=False):
     
     return offsets
 
-def unet_crop(image, verbose=False):
+def unet_crop(image, model, verbose=False):
     """
     Second stage option of cropping the DICOM image by using a trained U-Net network
     to find an instance segmentation of the thoracic cavity and ribs and finding the
@@ -388,6 +389,9 @@ def unet_crop(image, verbose=False):
     ----------
     image : ndarray
         array of the DICOM image after initial crop
+    model : Tensorflow model
+        U-Net architecture model to use instance segmentation instead
+        of region crop for second stage of cropping
     verbose : bool
         If True, print out the index offsets using center cropping
         
@@ -396,11 +400,33 @@ def unet_crop(image, verbose=False):
     offsets : int (top, bottom, left, right)
         pixel offsets to constrict after rough crop
     """
+    # Make copy of image to prep for U-Net
+    image_copy = image.copy()
 
-    '''ADD IN U-NET MODEL INFERENCING CODE'''
+    # Resize and normalize to [0, 1] for U-Net
+    image_copy = cv2.resize(image_copy, (256, 256), interpolation=cv2.INTER_NEAREST)
+    image_copy = (image_copy - np.min(image_copy)) / (np.max(image_copy) - np.min(image_copy))
 
-    # Store the offsets
-    offsets = (top_bound, bottom_bound, left_bound, right_bound)
+    # Predict segementation mask with U-Net and check if "failed"
+    y_pred = model.predict(image_copy[np.newaxis, ...]).squeeze(axis=0)  # remove "batch" dimension
+    y_pred = to_binary(y_pred)  # threshold to one-hot
+
+    # Convert predicted segmentation to categorical (h, w)
+    cat_y_pred = np.argmax(y_pred, axis=-1)
+
+    # Process prediction (keep largest connected component)
+    # and check if U-Net has "failed"
+    cat_y_pred, unet_failed = postprocess(cat_y_pred)
+
+    # Return nonsense offsets if U-Net segmentation "failed"
+    if unet_failed:
+        return (-1, -1, -1, -1) 
+
+    # Resize prediction to rough crop dimensions
+    cat_y_pred = cv2.resize(cat_y_pred, image.shape, interpolation=cv2.INTER_NEAREST)
+
+    # Find offsets based on processed, predicted mask
+    offsets = get_unet_offsets(cat_y_pred)
     
     # Print second stage crop offsets
     if verbose:
@@ -496,7 +522,14 @@ def crop_dicom(dicom_file, mm_spacing=5, verbose=False, crop_region='center', mo
     
     # Get the index offsets from the region crop stage or U-Net segmentation
     if model is not None:
-        region_offsets = unet_crop(image_copy, verbose=verbose)
+        region_offsets = unet_crop(image_copy, model, verbose=verbose)
+
+        # If U-Net failed, revert to non-U-Net region crop
+        if region_offsets == (-1, -1, -1, -1):
+            if crop_region == 'quad':
+                region_offsets = get_quad_crop_offsets(image_copy, verbose=verbose)
+            elif crop_region == 'center':
+                region_offsets = get_center_crop_offsets(image_copy, verbose=verbose)
     else:
         if crop_region == 'quad':
             region_offsets = get_quad_crop_offsets(image_copy, verbose=verbose)
