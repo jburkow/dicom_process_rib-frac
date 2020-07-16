@@ -2,7 +2,7 @@
 Filename: dicom_utils.py
 Author: Jonathan Burkow, burkowjo@msu.edu
         Michigan State University
-Last Updated: 05/18/2020
+Last Updated: 07/15/2020
 Description: A collection of utility functions needed
     to process through DICOM files, including thresholding,
     cropping, histogram equalization, and saving to PNGs.
@@ -387,6 +387,12 @@ def load_dicom_image(dicom_file, verbose=False):
     else:
         image = dicom_file.pixel_array.copy()
     
+    # Depending on DICOM Photometric Interpretation value, invert the image.
+    # MONOCHROME1 : values close to 0 appear white => invert
+    # MONOCHROME2 : values close to 0 appear black => keep original
+    if dicom_file.PhotometricInterpretation == 'MONOCHROME1':
+        image = invert_image(image.astype('uint16'))
+        
     # Retrieve pixel intensity data from the dicom file
     # Rescale array values to ensure pixel intensities reflect original data
     try:
@@ -397,12 +403,6 @@ def load_dicom_image(dicom_file, verbose=False):
         intercept = 0.0
     image = slope * image + intercept
 
-    # Depending on DICOM Photometric Interpretation value, invert the image.
-    # MONOCHROME1 : values close to 0 appear white => invert
-    # MONOCHROME2 : values close to 0 appear black => keep original
-    if dicom_file.PhotometricInterpretation == 'MONOCHROME1':
-        image = invert_image(image.astype('uint16'))
-        
     # Plot the image from the dicom file
     if verbose: plot_image(image, title='Original Image')
     
