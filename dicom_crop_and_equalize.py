@@ -19,7 +19,7 @@ import time
 import sys
 from dicom_utils import load_dicom_image, crop_dicom, hist_equalization, create_rgb, image_scale_to_8bit, save_to_png
 import args
-from unet import Unet
+from unet_utils import Unet
 
 # Determine whether to instantiate and load U-Net model based on command line argument
 if len(sys.argv) > 1 and sys.argv[1] == 'unet':
