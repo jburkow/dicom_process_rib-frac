@@ -392,7 +392,7 @@ def load_dicom_image(dicom_file, verbose=False):
     # MONOCHROME2 : values close to 0 appear black => keep original
     if dicom_file.PhotometricInterpretation == 'MONOCHROME1':
         image = invert_image(image.astype('uint16'))
-        
+    
     # Retrieve pixel intensity data from the dicom file
     # Rescale array values to ensure pixel intensities reflect original data
     try:
@@ -495,12 +495,29 @@ def save_to_png(image_array, save_loc):
     """
     numpngw.write_png(save_loc, image_array)
 
-def image_scale_to_8bit(image):
+def scale_image_to_depth(image, bit_depth):
     """
-    Scale the input image to 8 bit.
+    Takes the input image array and scales the  values to the
+    specified bit depth.
+    
+    Parameters
+    ----------
+    image : ndarray
+        array of the image
+    bit_depth : int
+        bit depth the image will be saved as
     """
-    image = image / image.max() * 255
-    return image.astype('uint8')
+    # Normalize all values between [0,1] if they aren't already
+    image = image if image.max() == 1.0 else (image / image.max())
+
+    # Scale values to specified bit depth values
+    image *= 2**bit_depth - 1
+
+    # Return image as specific datatype based on bit depth
+    if bit_depth == 8:
+        return image.astype('uint8')
+    elif bit_depth == 16:
+        return image.astype('uint16')
 
 def hist_equalization(image, method='hand', bit_depth=16, verbose=False):
     """
@@ -561,4 +578,3 @@ def hist_equalization(image, method='hand', bit_depth=16, verbose=False):
     if verbose: plot_image(hist_eq_img, title='Histogram Equalized Image')
     
     return hist_eq_img
-    
