@@ -23,9 +23,9 @@ from unet_utils import Unet
 
 # Determine whether to instantiate and load U-Net model based on command line argument
 if len(sys.argv) > 1 and sys.argv[1] == 'unet':
-    # Instantiate U-Net model
+    # Instantiate U-Net model and load pre-trained weights
     unet_model = Unet(img_height=256, img_width=256, n_classes=8, n_filters=32)
-    unet_model.load_weights("aug_unet_256_32f_cce_071019_weights.h5")  # load weights
+    unet_model.load_weights(args.ARGS['MODEL_WEIGHTS_FILENAME'])
 else:
     unet_model = None
 
