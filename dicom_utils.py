@@ -379,7 +379,7 @@ def get_center_crop_offsets(image, verbose=False):
     
     return offsets
 
-def unet_crop(image, model, verbose=False):
+def unet_crop(image, pixel_spacing, model, verbose=False):
     """
     Second stage option of cropping the DICOM image by using a trained U-Net network
     to find an instance segmentation of the thoracic cavity and ribs and finding the
@@ -389,14 +389,18 @@ def unet_crop(image, model, verbose=False):
     ----------
     image : ndarray
         array of the DICOM image after initial crop
-    model : Tensorflow model
-        U-Net architecture model to use instance segmentation instead
+    pixel_spacing : list [row_spacing, column_spacing]
+        row and column spacing of image in physical units 
+    model : Tensorflow-Keras model
+        U-Net architecture model to use segmentation instead
         of region crop for second stage of cropping
     verbose : bool
         If True, print out the index offsets using center cropping
         
     Returns
     -------
+    cat_y_pred : ndarray
+        processed, categorical segmentation mask of shape (h, w)
     offsets : int (top, bottom, left, right)
         pixel offsets to constrict after rough crop
     """
@@ -416,7 +420,7 @@ def unet_crop(image, model, verbose=False):
 
     # Process prediction (keep largest connected component)
     # and check if U-Net has "failed"
-    cat_y_pred, unet_failed = postprocess(cat_y_pred)
+    cat_y_pred, unet_failed = postprocess(cat_y_pred, pixel_spacing)
 
     # Return nonsense offsets if U-Net segmentation "failed"
     if unet_failed:
@@ -432,7 +436,7 @@ def unet_crop(image, model, verbose=False):
     if verbose:
         print('U-Net segmentation crop offsets:', offsets)
 
-    return offsets
+    return cat_y_pred, offsets
 
 def load_dicom_image(dicom_file, verbose=False):
     """
@@ -505,6 +509,8 @@ def crop_dicom(dicom_file, mm_spacing=5, verbose=False, crop_region='center', mo
     -------
     image : ndarray
         the fully processed and cropped image array
+    y_pred : ndarray
+        fully processed and cropped segmentation mask
     offsets : int (top, bottom, left, right)
         the pixel offsets needed to adjust annotations
     """
@@ -522,7 +528,8 @@ def crop_dicom(dicom_file, mm_spacing=5, verbose=False, crop_region='center', mo
     
     # Get the index offsets from the region crop stage or U-Net segmentation
     if model is not None:
-        region_offsets = unet_crop(image_copy, model, verbose=verbose)
+        pixel_spacing = dicom_file.ImagerPixelSpacing if hasattr(dicom_file, "ImagerPixelSpacing") else None
+        cat_y_pred, region_offsets = unet_crop(image_copy, pixel_spacing, model, verbose=verbose)
 
         # If U-Net failed, revert to non-U-Net region crop
         if region_offsets == (-1, -1, -1, -1):
@@ -550,10 +557,14 @@ def crop_dicom(dicom_file, mm_spacing=5, verbose=False, crop_region='center', mo
     # Crop the original image based on indices from both crop stages
     image = image[indices[0]:indices[1], indices[2]:indices[3]]
     
+    # Crop segmentation mask based on same indices
+    cat_y_pred = cat_y_pred[indices[0]:indices[1], indices[2]:indices[3]]
+    y_pred = to_one_hot(cat_y_pred)   # convert to one-hot (h, w, 8)
+
     # Plot the final cropped image
     if verbose: plot_image(image, title='Final Cropped Image')
     
-    return image, indices
+    return image, y_pred, indices
 
 def plot_image(image, cmap='gray', title='', axis=True):
     """

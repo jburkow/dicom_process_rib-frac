@@ -47,6 +47,10 @@ original_equalized_16bit_folder = os.path.join(folder_16bit, args.ARGS['ORIGINAL
 cropped_16bit_folder = os.path.join(folder_16bit, args.ARGS['CROPPED_IMAGE_FOLDER'])
 cropped_equalized_16bit_folder = os.path.join(folder_16bit, args.ARGS['CROPPED_EQUALIZED_IMAGE_FOLDER'])
 
+# Set up segmentation mask folder path
+folder_seg_mask = args.ARGS['SEG_MASK_FOLDER']
+cropped_seg_mask_folder = os.path.join(folder_seg_mask, args.ARGS['CROPPED_MASK_FOLDER'])
+
 # Check for existence of 8-bit folders
 if not os.path.isdir(folder_8bit):
     os.mkdir(folder_8bit)
@@ -70,6 +74,12 @@ if not os.path.isdir(cropped_16bit_folder):
     os.mkdir(cropped_16bit_folder)
 if not os.path.isdir(cropped_equalized_16bit_folder):
     os.mkdir(cropped_equalized_16bit_folder)
+
+# Check for existence of segmentation mask folders
+if not os.path.isdir(folder_seg_mask):
+    os.mkdir(folder_seg_mask)
+if not os.path.isdir(cropped_seg_mask_folder):
+    os.mkdir(cropped_seg_mask_folder)
 
 # Import the dataset list
 dataset_list = []
@@ -123,7 +133,7 @@ for i, file in enumerate(dataset_list):
 
         # Retrieve original and cropped image
         original_image = load_dicom_image(dcm)
-        cropped_image, offsets = crop_dicom(dcm, model=unet_model)
+        cropped_image, pred_mask, offsets = crop_dicom(dcm, model=unet_model)
 
         # Do histogram equalization on the cropped image
         original_histeq_image = hist_equalization(original_image, method='skimage')
@@ -177,7 +187,13 @@ for i, file in enumerate(dataset_list):
         save_to_png(original_histeq_16bit_rgb, original_histeq_16bit_path)
         save_to_png(cropped_16bit_rgb, cropped_16bit_path)
         save_to_png(cropped_histeq_16bit_rgb, cropped_histeq_16bit_path)
-        
+
+        # Set filename for cropped, processed segmentation mask
+        cropped_seg_mask_path = os.path.join(cropped_seg_mask_folder, filename + '.npy')
+
+        # Save cropped, processed segmentation mask
+        np.save(cropped_seg_mask_path, pred_mask)
+
     except:
         failed_list.append(filename)
 
