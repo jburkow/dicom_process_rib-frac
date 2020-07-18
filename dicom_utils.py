@@ -1,20 +1,19 @@
 '''
 Filename: dicom_utils.py
-Author: Jonathan Burkow, burkowjo@msu.edu
-        Michigan State University
-Last Updated: 07/15/2020
+Authors: Jonathan Burkow, burkowjo@msu.edu
+         Greg Holste, holstegr@msu.edu
+         Michigan State University
+Last Updated: 07/17/2020
 Description: A collection of utility functions needed
     to process through DICOM files, including thresholding,
     cropping, histogram equalization, and saving to PNGs.
 '''
 
 import numpy as np
-from pydicom import dcmread
 import matplotlib.pyplot as plt
 import cv2
 from skimage import exposure, color, filters
 import numpngw
-import unet_utils
 from unet_utils import to_binary, to_one_hot, postprocess, get_unet_offsets
 
 def invert_image(image):
@@ -413,7 +412,8 @@ def unet_crop(image, pixel_spacing, model, verbose=False):
     image_copy = (image_copy - np.min(image_copy)) / (np.max(image_copy) - np.min(image_copy))
 
     # Predict segementation mask with U-Net and check if "failed"
-    y_pred = model.predict(image_copy[np.newaxis, ...]).squeeze(axis=0)  # remove "batch" dimension
+    # y_pred = model.predict(image_copy[np.newaxis, ...]).squeeze(axis=0)  # remove "batch" dimension
+    y_pred = model.predict(image_copy[np.newaxis, ..., np.newaxis]).squeeze(axis=0)  # remove "batch" dimension
     y_pred = to_binary(y_pred)  # threshold to one-hot
 
     # Convert predicted segmentation to categorical (h, w)
@@ -425,7 +425,7 @@ def unet_crop(image, pixel_spacing, model, verbose=False):
 
     # Return nonsense offsets if U-Net segmentation "failed"
     if unet_failed:
-        return (-1, -1, -1, -1) 
+        return None, (-1, -1, -1, -1)
 
     # Resize prediction to rough crop dimensions
     cat_y_pred = cv2.resize(cat_y_pred, image.shape, interpolation=cv2.INTER_NEAREST)
@@ -559,8 +559,11 @@ def crop_dicom(dicom_file, mm_spacing=5, verbose=False, crop_region='center', mo
     image = image[indices[0]:indices[1], indices[2]:indices[3]]
     
     # Crop segmentation mask based on same indices
-    cat_y_pred = cat_y_pred[indices[0]:indices[1], indices[2]:indices[3]]
-    y_pred = to_one_hot(cat_y_pred)   # convert to one-hot (h, w, 8)
+    if cat_y_pred is not None:
+        cat_y_pred = cat_y_pred[indices[0]:indices[1], indices[2]:indices[3]]
+        y_pred = to_one_hot(cat_y_pred)   # convert to one-hot (h, w, 8)
+    else:
+        y_pred = None
 
     # Plot the final cropped image
     if verbose: plot_image(image, title='Final Cropped Image')
