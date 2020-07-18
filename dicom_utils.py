@@ -14,6 +14,7 @@ import matplotlib.pyplot as plt
 import cv2
 from skimage import exposure, color, filters
 import numpngw
+import unet_utils
 from unet_utils import to_binary, to_one_hot, postprocess, get_unet_offsets
 
 def invert_image(image):
@@ -396,7 +397,7 @@ def unet_crop(image, pixel_spacing, model, verbose=False):
         of region crop for second stage of cropping
     verbose : bool
         If True, print out the index offsets using center cropping
-        
+    
     Returns
     -------
     cat_y_pred : ndarray
@@ -639,7 +640,7 @@ def hist_equalization(image, method='hand', bit_depth=16, verbose=False):
     if method == 'opencv':
         # Convert array to 8-bit
         if image.dtype != 'uint8':
-            image = image_scale_to_8bit(image)
+            image = scale_image_to_depth(image, 8)
         # Equalize the image
         hist_eq_img = cv2.equalizeHist(image)
         
@@ -656,7 +657,7 @@ def hist_equalization(image, method='hand', bit_depth=16, verbose=False):
 
         # Calculate the PMF and CDF of the original cropped image
         hist, bins = np.histogram(image.flatten(), bins=L, range=[0, (L-1)])
-        pixel_pdf = hist / image.size
+        # pixel_pdf = hist / image.size
         pixel_cdf = hist.cumsum()
 
         # Get the equalized values for the pixel intensities
