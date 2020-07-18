@@ -425,7 +425,7 @@ def unet_crop(image, pixel_spacing, model, verbose=False):
 
     # Return nonsense offsets if U-Net segmentation "failed"
     if unet_failed:
-        return None, (-1, -1, -1, -1)
+        return cat_y_pred, (-1, -1, -1, -1)
 
     # Resize prediction to rough crop dimensions
     cat_y_pred = cv2.resize(cat_y_pred, image.shape, interpolation=cv2.INTER_NEAREST)
@@ -559,11 +559,8 @@ def crop_dicom(dicom_file, mm_spacing=5, verbose=False, crop_region='center', mo
     image = image[indices[0]:indices[1], indices[2]:indices[3]]
     
     # Crop segmentation mask based on same indices
-    if cat_y_pred is not None:
-        cat_y_pred = cat_y_pred[indices[0]:indices[1], indices[2]:indices[3]]
-        y_pred = to_one_hot(cat_y_pred)   # convert to one-hot (h, w, 8)
-    else:
-        y_pred = None
+    cat_y_pred = cat_y_pred[indices[0]:indices[1], indices[2]:indices[3]]
+    y_pred = to_one_hot(cat_y_pred)   # convert to one-hot (h, w, 8)
 
     # Plot the final cropped image
     if verbose: plot_image(image, title='Final Cropped Image')
@@ -578,6 +575,19 @@ def plot_image(image, cmap='gray', title='', axis=True):
     plt.imshow(image, cmap=cmap)
     plt.title(title)
     if not axis: plt.axis('off')
+
+def save_to_npy(y_pred, save_loc):
+    """
+    Save NumPy array to a .npy file.
+    
+    Parameters
+    ----------
+    y_pred : ndarray
+        fully processed, cropped segmentation mask
+    save_loc : str
+        filepath of destination of image_array
+    """
+    np.save(save_loc, y_pred)
 
 def save_to_png(image_array, save_loc):
     """

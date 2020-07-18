@@ -17,7 +17,7 @@ import csv
 import os
 import time
 import sys
-from dicom_utils import load_dicom_image, crop_dicom, hist_equalization, create_rgb, scale_image_to_depth, save_to_png
+from dicom_utils import load_dicom_image, crop_dicom, hist_equalization, create_rgb, scale_image_to_depth, save_to_png, save_to_npy
 import args
 from unet_utils import Unet
 
@@ -177,6 +177,9 @@ for i, file in enumerate(dataset_list):
         cropped_16bit_path = os.path.join(cropped_16bit_folder, filename + '.png')
         cropped_histeq_16bit_path = os.path.join(cropped_equalized_16bit_folder, filename + '.png')
 
+        # Set filename for cropped, processed segmentation mask
+        cropped_seg_mask_path = os.path.join(cropped_seg_mask_folder, filename + '.npy')
+
         # Save the images to their respective folders
         save_to_png(original_8bit_rgb, original_8bit_path)
         save_to_png(original_histeq_8bit_rgb, original_histeq_8bit_path)
@@ -188,12 +191,8 @@ for i, file in enumerate(dataset_list):
         save_to_png(cropped_16bit_rgb, cropped_16bit_path)
         save_to_png(cropped_histeq_16bit_rgb, cropped_histeq_16bit_path)
 
-        # Set filename for cropped, processed segmentation mask
-        cropped_seg_mask_path = os.path.join(cropped_seg_mask_folder, filename + '.npy')
-
         # Save cropped, processed segmentation mask
-        if pred_mask is not None:
-            np.save(cropped_seg_mask_path, pred_mask)
+        save_to_npy(pred_mask, cropped_seg_mask_path)
 
     except Exception as e:
         print('') # End print stream from loop
