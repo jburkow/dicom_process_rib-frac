@@ -2,7 +2,7 @@
 Filename: dicom_crop_and_equalize.py
 Author: Jonathan Burkow, burkowjo@msu.edu
         Michigan State University
-Last Updated: 07/15/2020
+Last Updated: 07/17/2020
 Description: Loops through the list of DICOM files
     with image information and crops the image, and
     performs histogram equalization. Versions of the
@@ -17,7 +17,7 @@ import csv
 import os
 import time
 import sys
-from dicom_utils import load_dicom_image, crop_dicom, hist_equalization, create_rgb, image_scale_to_8bit, save_to_png
+from dicom_utils import load_dicom_image, crop_dicom, hist_equalization, create_rgb, scale_image_to_depth, save_to_png
 import args
 from unet_utils import Unet
 
@@ -192,9 +192,12 @@ for i, file in enumerate(dataset_list):
         cropped_seg_mask_path = os.path.join(cropped_seg_mask_folder, filename + '.npy')
 
         # Save cropped, processed segmentation mask
-        np.save(cropped_seg_mask_path, pred_mask)
+        if pred_mask is not None:
+            np.save(cropped_seg_mask_path, pred_mask)
 
-    except:
+    except Exception as e:
+        print('') # End print stream from loop
+        print(e)
         failed_list.append(filename)
 
 print('') # End print stream from loop
@@ -202,15 +205,15 @@ print('') # End print stream from loop
 # Print out failed-to-process images:
 if len(failed_list) > 0:
     print("Failed on", len(failed_list), "images:")
-    for img in failed_list:
-        print(img)
+    [print(img) for img in failed_list]
 
 # Export the list of offsets to a file
 # Rows are (IMG, X_OFFSET, Y_OFFSET)
-with open(args.ARGS['OFFSET_FILENAME'], 'w') as out_file:
-    for line in offset_list:
-        out_str = line + '\n'
-        out_file.write(out_str)
+if not args.ARGS['BREAK']:
+    with open(args.ARGS['OFFSET_FILENAME'], 'w') as out_file:
+        for line in offset_list:
+            out_str = line + '\n'
+            out_file.write(out_str)
 
 # Print out time to complete
 print('Done!')
