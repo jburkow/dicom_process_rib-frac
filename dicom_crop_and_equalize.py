@@ -96,28 +96,29 @@ with open(args.ARGS['INSTANCE_UID_FILENAME'], 'r') as data_file:
 offset_list = []
 failed_list = []
 for i, file in enumerate(dataset_list):
-    if "Anon_IB_1472" not in file:
-        continue
     if args.ARGS['BREAK'] and i == args.ARGS['CROP_BREAK_NUM']:
         break
 
     try:
-        print('Processing image {} of {} ({}%).'.format(i+1, len(dataset_list), round((i+1)/len(dataset_list)*100,1)), end='\r')
+        print('Processing image {} of {} ({}%).'.format(i+1,
+                                                        len(dataset_list),
+                                                        round((i+1)/len(dataset_list)*100, 1)),
+              end='\r')
 
         # Grab filename
         filename = file[file.rfind('/')+1:file.rfind('_')]
 
         # Check whether files already exist in all 4 sub-folders. If so, continue to next image
-        count_8bit = 0
-        count_16bit = 0
+        COUNT_8BIT = 0
+        COUNT_16BIT = 0
         for root, dirs, files in os.walk(folder_8bit):
             if filename + '.png' in files:
-                count_8bit += 1
+                COUNT_8BIT += 1
         for root, dirs, files in os.walk(folder_16bit):
             if filename + '.png' in files:
-                count_16bit += 1
+                COUNT_16BIT += 1
 
-        if count_8bit == 4 and count_16bit == 4:
+        if COUNT_8BIT == 4 and COUNT_16BIT == 4:
             continue
 
         # Load in dicom file
@@ -215,8 +216,8 @@ if len(failed_list) > 0:
 if not args.ARGS['BREAK']:
     with open(args.ARGS['OFFSET_FILENAME'], 'w') as out_file:
         for line in offset_list:
-            out_str = line + '\n'
-            out_file.write(out_str)
+            OUT_STR = line + '\n'
+            out_file.write(OUT_STR)
 
 # Print out time to complete
 print('Done!')
