@@ -98,6 +98,8 @@ with open(args.ARGS['INSTANCE_UID_FILENAME'], 'r') as data_file:
 offset_list = []
 failed_list = []
 for i, file in enumerate(dataset_list):
+    if "Anon_IB_1472" not in file:
+        continue
     if args.ARGS['BREAK'] and i == args.ARGS['CROP_BREAK_NUM']:
         break
     
@@ -133,7 +135,10 @@ for i, file in enumerate(dataset_list):
 
         # Retrieve original and cropped image
         original_image = load_dicom_image(dcm)
-        cropped_image, pred_mask, offsets = crop_dicom(dcm, model=unet_model)
+        if unet_model is not None:
+            cropped_image, pred_mask, offsets = crop_dicom(dcm, model=unet_model)
+        else:
+            cropped_image, offsets = crop_dicom(dcm, model=unet_model)
 
         # Do histogram equalization on the cropped image
         original_histeq_image = hist_equalization(original_image, method='skimage')
@@ -192,7 +197,8 @@ for i, file in enumerate(dataset_list):
         save_to_png(cropped_histeq_16bit_rgb, cropped_histeq_16bit_path)
 
         # Save cropped, processed segmentation mask
-        save_to_npy(pred_mask, cropped_seg_mask_path)
+        if unet_model is not None:
+            save_to_npy(pred_mask, cropped_seg_mask_path)
 
     except Exception as e:
         print('') # End print stream from loop

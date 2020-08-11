@@ -390,7 +390,7 @@ def unet_crop(image, pixel_spacing, model, verbose=False):
     image : ndarray
         array of the DICOM image after initial crop
     pixel_spacing : list [row_spacing, column_spacing]
-        row and column spacing of image in physical units 
+        row and column spacing of image in physical units
     model : Tensorflow-Keras model
         U-Net architecture model to use segmentation instead
         of region crop for second stage of cropping
@@ -517,7 +517,8 @@ def crop_dicom(dicom_file, mm_spacing=5, verbose=False, crop_region='center', mo
     """
     # Load the image in from the dicom file
     image = load_dicom_image(dicom_file, verbose=verbose)
-    
+    orig_image_shape = image.shape
+
     # Make a copy of the image to modify
     image_copy = image.copy()
     
@@ -543,7 +544,7 @@ def crop_dicom(dicom_file, mm_spacing=5, verbose=False, crop_region='center', mo
             region_offsets = get_quad_crop_offsets(image_copy, verbose=verbose)
         elif crop_region == 'center':
             region_offsets = get_center_crop_offsets(image_copy, verbose=verbose)
-    
+
     # Calculate overall indices to crop the original image
     # If available, use ImagerPixelSpacing values for additional crop
     if hasattr(dicom_file, 'ImagerPixelSpacing'):
@@ -558,14 +559,19 @@ def crop_dicom(dicom_file, mm_spacing=5, verbose=False, crop_region='center', mo
     # Crop the original image based on indices from both crop stages
     image = image[indices[0]:indices[1], indices[2]:indices[3]]
     
-    # Crop segmentation mask based on same indices
-    cat_y_pred = cat_y_pred[indices[0]:indices[1], indices[2]:indices[3]]
-    y_pred = to_one_hot(cat_y_pred)   # convert to one-hot (h, w, 8)
-
     # Plot the final cropped image
     if verbose: plot_image(image, title='Final Cropped Image')
-    
-    return image, y_pred, indices
+
+    if model is not None:
+        # Upscale segmentation mask to original image dimensions
+        cat_y_pred = cv2.resize(cat_y_pred, orig_image_shape, interpolation=cv2.INTER_NEAREST)
+        # Crop segmentation mask based on same indices
+        cat_y_pred = cat_y_pred[indices[0]:indices[1], indices[2]:indices[3]]
+        y_pred = to_one_hot(cat_y_pred)   # convert to one-hot (h, w, 8)
+
+        return image, y_pred, indices
+    else:
+        return image, indices
 
 def plot_image(image, cmap='gray', title='', axis=True):
     """
