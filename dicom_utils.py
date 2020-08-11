@@ -3,10 +3,10 @@ Filename: dicom_utils.py
 Authors: Jonathan Burkow, burkowjo@msu.edu
          Greg Holste, holstegr@msu.edu
          Michigan State University
-Last Updated: 07/17/2020
-Description: A collection of utility functions needed
-    to process through DICOM files, including thresholding,
-    cropping, histogram equalization, and saving to PNGs.
+Last Updated: 08/10/2020
+Description: A collection of utility functions needed to process through
+    DICOM files, including thresholding, cropping, histogram
+    equalization, and saving to PNGs.
 '''
 
 import numpy as np
@@ -18,15 +18,14 @@ from unet_utils import to_binary, to_one_hot, postprocess, get_unet_offsets
 
 def invert_image(image):
     """
-    If the image has reversed intensity values, i.e., values
-    close to 0 appear white and higher appear black, invert
-    the image array values so that values close to 0 appear
-    black and higher appear white.
-    
+    If the image has reversed intensity values, i.e., values close to 0
+    appear white and higher appear black, invert the image array values
+    so that values close to 0 appear black and higher appear white.
+
     Notes
     -----
-    Subtracting by the min value retains the same value range
-    as the original image.
+    Subtracting by the min value retains the same value range as the
+    original image.
     """
     return np.invert(image) - np.invert(image).min()
 
@@ -46,14 +45,14 @@ def create_rgb(image):
     """
     # Stack the array three times for RGB channels
     image = np.stack([image, image, image], axis=-1)
-    
+
     return image
 
 def threshold_image(image, method='li', verbose=False):
     """
-    Use scikit-image filtering methods to threshold the image array
-    to set all values below a certain value to zero. Used for cropping.
-    
+    Use scikit-image filtering methods to threshold the image array to
+    set all values below a certain value to zero. Used for cropping.
+
     Parameters
     ----------
     image : ndarray
@@ -62,7 +61,7 @@ def threshold_image(image, method='li', verbose=False):
         the method of thresholding to use
     verbose : bool
         If True, print out the thresholded image
-    
+
     Returns
     -------
     image : ndarray
@@ -76,22 +75,22 @@ def threshold_image(image, method='li', verbose=False):
         threshold = thresholds[0]
     elif method == 'li':
         threshold = filters.threshold_li(image)
-    
+
     # Threshold the image
     image[image < threshold] = 0
-    
+
     # Plot the current stage of the image
     if verbose: plot_image(image, title='Thresholded Image')
-    
+
     return image
 
 def rough_crop(image, blank_dist=20, verbose=False):
     """
-    The first stage of cropping for processing DICOM images.
-    Taking in a numpy array representation of the DICOM image,
-    crop the array based on row/column sums with nonzero elements.
-    Outputs the x and y offsets for adjusting annotations post-crop.
-    
+    The first stage of cropping for processing DICOM images. Taking in
+    a numpy array representation of the DICOM image, crop the array
+    based on row/column sums with nonzero elements. Outputs the x and y
+    offsets for adjusting annotations post-crop.
+
     Parameters
     ----------
     image : ndarray
@@ -100,27 +99,27 @@ def rough_crop(image, blank_dist=20, verbose=False):
         distance between nonzero indices to determine crop boundaries
     verbose : bool
         If True, print out the cropped image
-    
+
     Returns
     -------
     image : ndarray
         array of the image after rough cropping is performed
-    indices : int (top, bottom, left, right)
+    indices : int, (top, bottom, left, right)
         tuple containing the boundary indices for the rough crop
     """
     # Extract image height and width
     h, w = image.shape[0], image.shape[1]
-    
+
     # Compute row and column sums and find nonzero indices
     col_nonzero = image.sum(axis=0).nonzero()[0]
     row_nonzero = image.sum(axis=1).nonzero()[0]
-    
+
     # Create dummy variables for each bound
     left_bound, right_bound, top_bound, bottom_bound = -1, -1, -1, -1
-    
+
     # Compute left bound based on black space between indices
     for i in range(0, len(col_nonzero) - 1):
-        if(col_nonzero[i] > w // 2):
+        if col_nonzero[i] > w // 2:
             break
         if col_nonzero[i+1] - col_nonzero[i] > blank_dist:
             left_bound = col_nonzero[i+1]
@@ -129,7 +128,7 @@ def rough_crop(image, blank_dist=20, verbose=False):
 
     # Compute right bound based on black space between indices
     for i in range(len(col_nonzero)-1, 0, -1):
-        if(col_nonzero[i] < w // 2):
+        if col_nonzero[i] < w // 2:
             break
         if col_nonzero[i] - col_nonzero[i-1] > blank_dist:
             right_bound = col_nonzero[i-1]
@@ -138,7 +137,7 @@ def rough_crop(image, blank_dist=20, verbose=False):
 
     # Compute top bound based on black space between indices
     for i in range(0, len(row_nonzero) - 1):
-        if(row_nonzero[i] > h // 2):
+        if row_nonzero[i] > h // 2:
             break
         if row_nonzero[i+1] - row_nonzero[i] > blank_dist:
             top_bound = row_nonzero[i+1]
@@ -147,36 +146,36 @@ def rough_crop(image, blank_dist=20, verbose=False):
 
     # Compute bottom bound based on black space between indices
     for i in range(len(row_nonzero)-1, 0, -1):
-        if(row_nonzero[i] < h // 2):
+        if row_nonzero[i] < h // 2:
             break
         if row_nonzero[i] - row_nonzero[i-1] > blank_dist:
             bottom_bound = row_nonzero[i-1]
     # Set bottom bound too min nonzero index if no black space exists
     if bottom_bound < 0: bottom_bound = row_nonzero.max()
-        
+
     # Store the offsets
     top = int(top_bound)
     bottom = int(bottom_bound) + 1
     left = int(left_bound)
     right = int(right_bound) + 1
-    
+
     indices = (top, bottom, left, right)
-    
+
     # Crop the image based on initial crop indices
     image = image[top:bottom, left:right]
-    
+
     # Plot the current stage of the image and print crop indices
     if verbose:
         print('Initial Crop:', indices)
         plot_image(image, title='Initial Crop')
-    
+
     return image, indices
 
 def quadrant_indices(quadrant_array, quad_height, quad_width, quadrant, sum_threshold=0.10):
     """
     For a given quadrant of the image array, return the corresponding
     indices for the boundaries obtained for the second stage of cropping.
-    
+
     Parameters
     ----------
     quadrant_array : ndarray
@@ -190,7 +189,7 @@ def quadrant_indices(quadrant_array, quad_height, quad_width, quadrant, sum_thre
     sum_threshold : float
         percentage of pixels of the row/column desired to
         contain information to be kept within the crop boundaries
-    
+
     Returns
     -------
     Combination of left/top, left/bottom, right/top, or right/bottom
@@ -198,12 +197,12 @@ def quadrant_indices(quadrant_array, quad_height, quad_width, quadrant, sum_thre
     """
     # Convert array to binary on whether pixels contain info or not
     binary = quadrant_array > 0
-    
+
     # Calculate row and column sums of binary array and find indices
     # with greather than a threshold number of pixels with data
     col_binary = binary.sum(axis=0) > quad_height * sum_threshold
     row_binary = binary.sum(axis=1) > quad_width * sum_threshold
-    
+
     # Based on specified quadrant, return relevant boundary indices
     if quadrant == 'topleft':
         try:
@@ -214,7 +213,7 @@ def quadrant_indices(quadrant_array, quad_height, quad_width, quadrant, sum_thre
             top_bound = row_binary.nonzero()[0].min()
         except:
             top_bound = 0
-        
+
         return int(left_bound), int(top_bound)
     elif quadrant == 'topright':
         try:
@@ -225,7 +224,7 @@ def quadrant_indices(quadrant_array, quad_height, quad_width, quadrant, sum_thre
             top_bound = row_binary.nonzero()[0].min()
         except:
             top_bound = 0
-            
+
         return int(right_bound), int(top_bound)
     elif quadrant == 'bottomleft':
         try:
@@ -236,7 +235,7 @@ def quadrant_indices(quadrant_array, quad_height, quad_width, quadrant, sum_thre
             bottom_bound = row_binary.nonzero()[0].max()
         except:
             bottom_bound= quad_height
-        
+
         return int(left_bound), int(bottom_bound)
     elif quadrant == 'bottomright':
         try:
@@ -247,7 +246,7 @@ def quadrant_indices(quadrant_array, quad_height, quad_width, quadrant, sum_thre
             bottom_bound = row_binary.nonzero()[0].max()
         except:
             bottom_bound = quad_height
-        
+
         return int(right_bound), int(bottom_bound)
     elif quadrant == 'centerleft':
         try:
@@ -264,127 +263,131 @@ def quadrant_indices(quadrant_array, quad_height, quad_width, quadrant, sum_thre
 
 def get_quad_crop_offsets(image, verbose=False):
     """
-    Second stage option of cropping the DICOM image by splitting the array
-    into quadrants and looking at empty space within each. After indices
-    are found from each quadrant, the tightest bounds are chosen and the
-    image is cropped with them plus an additional amount given by pixel_crop.
-    
+    Second stage option of cropping the DICOM image by splitting the
+    array into quadrants and looking at empty space within each. After
+    indices are found from each quadrant, the tightest bounds are chosen
+    and the image is cropped with them plus an additional amount given
+    by pixel_crop.
+
     Parameters
     ----------
     image : ndarray
         array of the DICOM image after initial crop
     verbose : bool
         If True, print out the index offsets using quadrant cropping
-        
+
     Returns
     -------
-    offsets : int (top, bottom, left, right)
+    offsets : int, (top, bottom, left, right)
         pixel offsets to constrict after rough crop
     """
     # Get the height and width of the quadrants
     quad_h, quad_w = image.shape[0]//2, image.shape[1]//2
-    
+
     ### Top Left Quadrant ###
     top_left = image[:quad_h, :quad_w]
     # Get left and top indices from top left quadrant
     tl_left_bound, tl_top_bound = quadrant_indices(top_left, quad_h, quad_w, 'topleft')
-    
+
     ### Top Right Quadrant ###
     top_right = image[:quad_h, quad_w:]
     # Get right and top indices from top right quadrant
     tr_right_bound, tr_top_bound = quadrant_indices(top_right, quad_h, quad_w, 'topright')
-    
+
     ### Bottom Left Quadrant ###
     bottom_left = image[:quad_h, :quad_w]
     # Get left and bottom indices from bottom left quadrant
     bl_left_bound, bl_bottom_bound = quadrant_indices(bottom_left, quad_h, quad_w, 'bottomleft')
-    
+
     ### Bottom Right Quadrant ###
     bottom_right = image[quad_h:, quad_w:]
     # Get right and bottom indices from top left quadrant
     br_right_bound, br_bottom_bound = quadrant_indices(bottom_right, quad_h, quad_w, 'bottomright')
-    
+
     # Calculate overall left, top, right, and bottom bounds
     top_bound = int(max(tl_top_bound, tr_top_bound))
     bottom_bound = int(image.shape[0] - (min(bl_bottom_bound, br_bottom_bound) + quad_h))
     left_bound = int(max(tl_left_bound, bl_left_bound))
     right_bound = int(image.shape[1] - (min(tr_right_bound, br_right_bound) + quad_w))
-    
+
     # Store the offsets
     offsets = (top_bound, bottom_bound, left_bound, right_bound)
-    
+
     # Print second stage crop offsets
     if verbose:
         print('Quadrant crop offsets:', offsets)
-    
+
     return offsets
 
 def get_center_crop_offsets(image, verbose=False):
     """
-    Second stage option of cropping the DICOM image by looking at the middle 50%
-    region of the image, splitting it into left and right sections, and finding empty
-    space within each. After indices are found from each quadrant, the tightest bounds are
-    chosen and the image is cropped with them plus an additional amount given by pixel_crop.
-    
+    Second stage option of cropping the DICOM image by looking at the
+    middle 50% region of the image, splitting it into left and right
+    sections, and finding empty space within each. After indices are
+    found from each quadrant, the tightest bounds are chosen and the
+    image is cropped with them plus an additional amount given by
+    pixel_crop.
+
     Parameters
     ----------
     image : ndarray
         array of the DICOM image after initial crop
     verbose : bool
         If True, print out the index offsets using center cropping
-        
+
     Returns
     -------
-    offsets : int (top, bottom, left, right)
+    offsets : int, (top, bottom, left, right)
         pixel offsets to constrict after rough crop
     """
     # Get the height and width of the center region
     center_h, center_w = image.shape[0]//2, image.shape[1]//2
-    
+
     # Get center top and bottom indices
     center_top, center_bottom = image.shape[0]//4, 3*(image.shape[0]//4)
-    
+
     # Get left bound
     center_left = image[center_top:center_bottom, :center_w]
     left_bound = quadrant_indices(center_left, center_h, center_w, 'centerleft')
-    
+
     # Get right bound
     center_right = image[center_top:center_bottom, center_w:]
     right_bound = quadrant_indices(center_right, center_h, center_w, 'centerright')
-    
+
     # Get top bound
     top_left = image[:center_h, :center_w]
     _, tl_top_bound = quadrant_indices(top_left, center_h, center_w, 'topleft')
     top_right = image[:center_h, center_w:]
     _, tr_top_bound = quadrant_indices(top_right, center_h, center_w, 'topright')
-    
+
     # Get bottom bound
     bottom_left = image[:center_h, :center_w]
     _, bl_bottom_bound = quadrant_indices(bottom_left, center_h, center_w, 'bottomleft')
     bottom_right = image[center_h:, center_w:]
     _, br_bottom_bound = quadrant_indices(bottom_right, center_h, center_w, 'bottomright')
-    
+
     # Calculate overall left, top, right, and bottom bounds
     top_bound = int(max(tl_top_bound, tr_top_bound))
     bottom_bound = int(image.shape[0] - (min(bl_bottom_bound, br_bottom_bound) + center_h))
     left_bound = int(left_bound)
     right_bound = int(image.shape[1] - (right_bound + center_w))
-    
+
     # Store the offsets
     offsets = (top_bound, bottom_bound, left_bound, right_bound)
-    
+
     # Print second stage crop offsets
     if verbose:
         print('Center crop offsets:', offsets)
-    
+
     return offsets
 
 def unet_crop(image, pixel_spacing, model, verbose=False):
     """
-    Second stage option of cropping the DICOM image by using a trained U-Net network
-    to find an instance segmentation of the thoracic cavity and ribs and finding the
-    smallest and largest indices of those masks.
-    
+    Second stage option of cropping the DICOM image by using a trained
+    U-Net network to find an instance segmentation of the thoracic
+    cavity and ribs and finding the smallest and largest indices of
+    those masks.
+
     Parameters
     ----------
     image : ndarray
@@ -396,12 +399,12 @@ def unet_crop(image, pixel_spacing, model, verbose=False):
         of region crop for second stage of cropping
     verbose : bool
         If True, print out the index offsets using center cropping
-    
+
     Returns
     -------
     cat_y_pred : ndarray
         processed, categorical segmentation mask of shape (h, w)
-    offsets : int (top, bottom, left, right)
+    offsets : int, (top, bottom, left, right)
         pixel offsets to constrict after rough crop
     """
     # Make copy of image to prep for U-Net
@@ -432,7 +435,7 @@ def unet_crop(image, pixel_spacing, model, verbose=False):
 
     # Find offsets based on processed, predicted mask
     offsets = get_unet_offsets(cat_y_pred)
-    
+
     # Print second stage crop offsets
     if verbose:
         print('U-Net segmentation crop offsets:', offsets)
@@ -442,14 +445,14 @@ def unet_crop(image, pixel_spacing, model, verbose=False):
 def load_dicom_image(dicom_file, verbose=False):
     """
     Load in the image array from the dicom file.
-    
+
     Parameters
     ----------
     dicom_file : PyDICOM dataset
         the DICOM file read in by PyDicom
     verbose : bool
         If True, print out the original image
-    
+
     Returns
     -------
     image : ndarray
@@ -466,7 +469,7 @@ def load_dicom_image(dicom_file, verbose=False):
         image = invert_image(dicom_file.pixel_array.copy().astype('uint16'))
     else:
         image = dicom_file.pixel_array.copy()
-    
+
     # Retrieve pixel intensity data from the dicom file
     # Rescale array values to ensure pixel intensities reflect original data
     try:
@@ -479,17 +482,17 @@ def load_dicom_image(dicom_file, verbose=False):
 
     # Plot the image from the dicom file
     if verbose: plot_image(image, title='Original Image')
-    
+
     return image.astype(float)
 
 def crop_dicom(dicom_file, mm_spacing=5, verbose=False, crop_region='center', model=None):
     """
-    Full function to crop a DICOM image. The pixel array is
-    cropped through two stages: the first does a rough crop to center
-    on the X-Ray, the second eliminates glowing/white borders and as
-    much empty space as possible. The offsets are preserved for adjusting
+    Full function to crop a DICOM image. The pixel array is cropped
+    through two stages: the first does a rough crop to center on the
+    X-Ray, the second eliminates glowing/white borders and as much empty
+    space as possible. The offsets are preserved for adjusting
     annotations later.
-    
+
     Parameters
     ----------
     dicom_file : PyDICOM dataset
@@ -505,14 +508,14 @@ def crop_dicom(dicom_file, mm_spacing=5, verbose=False, crop_region='center', mo
     model : Tensorflow model
         U-Net architecture model to use instance segmentation instead
         of region crop for second stage of cropping
-    
+
     Returns
     -------
     image : ndarray
         the fully processed and cropped image array
     y_pred : ndarray
         fully processed and cropped segmentation mask
-    offsets : int (top, bottom, left, right)
+    offsets : int, (top, bottom, left, right)
         the pixel offsets needed to adjust annotations
     """
     # Load the image in from the dicom file
@@ -521,13 +524,13 @@ def crop_dicom(dicom_file, mm_spacing=5, verbose=False, crop_region='center', mo
 
     # Make a copy of the image to modify
     image_copy = image.copy()
-    
+
     # Threshold the image copy for improved cropping
     image_copy = threshold_image(image_copy, method='li', verbose=verbose)
-    
+
     # Get the indices for the rough crop stage
     image_copy, init_crop = rough_crop(image_copy, verbose=verbose)
-    
+
     # Get the index offsets from the region crop stage or U-Net segmentation
     if model is not None:
         pixel_spacing = dicom_file.ImagerPixelSpacing if hasattr(dicom_file, "ImagerPixelSpacing") else None
@@ -550,15 +553,19 @@ def crop_dicom(dicom_file, mm_spacing=5, verbose=False, crop_region='center', mo
     if hasattr(dicom_file, 'ImagerPixelSpacing'):
         row_spacing = int(mm_spacing / dicom_file.ImagerPixelSpacing[0])
         col_spacing = int(mm_spacing / dicom_file.ImagerPixelSpacing[1])
-        indices = (max(0, init_crop[0] + region_offsets[0] - row_spacing), min(image.shape[0], init_crop[1] - region_offsets[1] + row_spacing),
-                   max(0, init_crop[2] + region_offsets[2] - col_spacing), min(image.shape[1], init_crop[3] - region_offsets[3] + col_spacing))
+        indices = (max(0, init_crop[0] + region_offsets[0] - row_spacing),
+                   min(image.shape[0], init_crop[1] - region_offsets[1] + row_spacing),
+                   max(0, init_crop[2] + region_offsets[2] - col_spacing),
+                   min(image.shape[1], init_crop[3] - region_offsets[3] + col_spacing))
     else:
-        indices = (max(0, init_crop[0] + region_offsets[0]), min(image.shape[0], init_crop[1] - region_offsets[1]),
-                   max(0, init_crop[2] + region_offsets[2]), min(image.shape[1], init_crop[3] - region_offsets[3]))
-    
+        indices = (max(0, init_crop[0] + region_offsets[0]),
+                   min(image.shape[0], init_crop[1] - region_offsets[1]),
+                   max(0, init_crop[2] + region_offsets[2]),
+                   min(image.shape[1], init_crop[3] - region_offsets[3]))
+
     # Crop the original image based on indices from both crop stages
     image = image[indices[0]:indices[1], indices[2]:indices[3]]
-    
+
     # Plot the final cropped image
     if verbose: plot_image(image, title='Final Cropped Image')
 
@@ -585,7 +592,7 @@ def plot_image(image, cmap='gray', title='', axis=True):
 def save_to_npy(y_pred, save_loc):
     """
     Save NumPy array to a .npy file.
-    
+
     Parameters
     ----------
     y_pred : ndarray
@@ -598,7 +605,7 @@ def save_to_npy(y_pred, save_loc):
 def save_to_png(image_array, save_loc):
     """
     Save the image array to a RGB PNG file.
-    
+
     Parameters
     ----------
     image_array : ndarray
@@ -612,7 +619,7 @@ def scale_image_to_depth(image, bit_depth):
     """
     Takes the input image array and scales the  values to the
     specified bit depth.
-    
+
     Parameters
     ----------
     image : ndarray
@@ -637,7 +644,7 @@ def hist_equalization(image, method='hand', bit_depth=16, verbose=False):
     Perform histogram equalization on the input image, dependent on the
     method chosen. OpenCV requires the image to be 8-bit, and skimage
     outputs an array with values between [0,1].
-    
+
     Parameters
     ----------
     image : ndarray
@@ -650,7 +657,7 @@ def hist_equalization(image, method='hand', bit_depth=16, verbose=False):
         (only used if method=='hand')
     verbose : bool
         If True, print out the equalized image
-    
+
     Returns
     -------
     hist_eq_img : ndarray
@@ -662,10 +669,10 @@ def hist_equalization(image, method='hand', bit_depth=16, verbose=False):
             image = scale_image_to_depth(image, 8)
         # Equalize the image
         hist_eq_img = cv2.equalizeHist(image)
-        
+
     elif method == 'skimage':
         hist_eq_img = exposure.equalize_hist(image)
-        
+
     elif method == 'hand':
         # Set the number of intensity values for the image image
         L = 2**bit_depth # 65536 for 16, 256 for 8
@@ -686,8 +693,8 @@ def hist_equalization(image, method='hand', bit_depth=16, verbose=False):
         hist_eq_img = np.interp(image.flatten(), bins[:-1], eq)
         # Reshape the array to the original shape
         hist_eq_img = hist_eq_img.reshape(image.shape)
-    
+
     # Plot the histogram equalized image
     if verbose: plot_image(hist_eq_img, title='Histogram Equalized Image')
-    
+
     return hist_eq_img

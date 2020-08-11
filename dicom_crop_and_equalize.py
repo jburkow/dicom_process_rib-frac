@@ -2,22 +2,20 @@
 Filename: dicom_crop_and_equalize.py
 Author: Jonathan Burkow, burkowjo@msu.edu
         Michigan State University
-Last Updated: 07/17/2020
-Description: Loops through the list of DICOM files
-    with image information and crops the image, and
-    performs histogram equalization. Versions of the
-    original, cropped, and equalized images in both
-    8-bit depth and 16-bit depth are saved.
+Last Updated: 08/10/2020
+Description: Loops through the list of DICOM files with image
+    information and crops the image, and performs histogram
+    equalization. Versions of the original, cropped, and equalized
+    images in both 8-bit depth and 16-bit depth are saved.
 '''
 
-import platform
-import numpy as np
-from pydicom import dcmread
 import csv
 import os
 import time
 import sys
-from dicom_utils import load_dicom_image, crop_dicom, hist_equalization, create_rgb, scale_image_to_depth, save_to_png, save_to_npy
+from pydicom import dcmread
+from dicom_utils import (load_dicom_image, crop_dicom, hist_equalization, create_rgb,
+                         scale_image_to_depth, save_to_png, save_to_npy)
 import args
 from unet_utils import Unet
 
@@ -31,7 +29,7 @@ else:
 
 # Print out start of execution
 print('Starting execution...')
-start_time = time.time()
+start_time = time.perf_counter()
 
 # Set up 8 bit folder paths
 folder_8bit = args.ARGS['8_BIT_FOLDER']
@@ -63,7 +61,7 @@ if not os.path.isdir(cropped_8bit_folder):
 if not os.path.isdir(cropped_equalized_8bit_folder):
     os.mkdir(cropped_equalized_8bit_folder)
 
-# Check for existence of 16-bit folders  
+# Check for existence of 16-bit folders
 if not os.path.isdir(folder_16bit):
     os.mkdir(folder_16bit)
 if not os.path.isdir(original_16bit_folder):
@@ -102,7 +100,7 @@ for i, file in enumerate(dataset_list):
         continue
     if args.ARGS['BREAK'] and i == args.ARGS['CROP_BREAK_NUM']:
         break
-    
+
     try:
         print('Processing image {} of {} ({}%).'.format(i+1, len(dataset_list), round((i+1)/len(dataset_list)*100,1)), end='\r')
 
@@ -124,10 +122,10 @@ for i, file in enumerate(dataset_list):
 
         # Load in dicom file
         dcm = dcmread(file)
-        
+
         # Pull out the InstanceUID of the dicom file
         instance_uid = dcm.SOPInstanceUID
-        
+
         # Check if InstanceUID is in the list of annotated instances.
         # If not, continue to next dicom file.
         if instance_uid not in instance_uids:
@@ -222,5 +220,5 @@ if not args.ARGS['BREAK']:
 
 # Print out time to complete
 print('Done!')
-end_time = time.time()
+end_time = time.perf_counter()
 print('Execution finished in {} seconds.'.format(round(end_time - start_time, 3)))
