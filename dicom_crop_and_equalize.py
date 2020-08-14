@@ -2,7 +2,7 @@
 Filename: dicom_crop_and_equalize.py
 Author: Jonathan Burkow, burkowjo@msu.edu
         Michigan State University
-Last Updated: 08/10/2020
+Last Updated: 08/13/2020
 Description: Loops through the list of DICOM files with image
     information and crops the image, and performs histogram
     equalization. Versions of the original, cropped, and equalized
@@ -185,15 +185,23 @@ for i, file in enumerate(dataset_list):
         cropped_seg_mask_path = os.path.join(cropped_seg_mask_folder, filename + '.npy')
 
         # Save the images to their respective folders
-        save_to_png(original_8bit_rgb, original_8bit_path)
-        save_to_png(original_histeq_8bit_rgb, original_histeq_8bit_path)
-        save_to_png(cropped_8bit_rgb, cropped_8bit_path)
-        save_to_png(cropped_histeq_8bit_rgb, cropped_histeq_8bit_path)
+        if not os.path.exists(original_8bit_path):
+            save_to_png(original_8bit_rgb, original_8bit_path)
+        if not os.path.exists(original_histeq_8bit_path):
+            save_to_png(original_histeq_8bit_rgb, original_histeq_8bit_path)
+        if not os.path.exists(cropped_8bit_path):
+            save_to_png(cropped_8bit_rgb, cropped_8bit_path)
+        if not os.path.exists(cropped_histeq_8bit_path):
+            save_to_png(cropped_histeq_8bit_rgb, cropped_histeq_8bit_path)
 
-        save_to_png(original_16bit_rgb, original_16bit_path)
-        save_to_png(original_histeq_16bit_rgb, original_histeq_16bit_path)
-        save_to_png(cropped_16bit_rgb, cropped_16bit_path)
-        save_to_png(cropped_histeq_16bit_rgb, cropped_histeq_16bit_path)
+        if not os.path.exists(original_16bit_path):
+            save_to_png(original_16bit_rgb, original_16bit_path)
+        if not os.path.exists(original_histeq_16bit_path):
+            save_to_png(original_histeq_16bit_rgb, original_histeq_16bit_path)
+        if not os.path.exists(cropped_16bit_path):
+            save_to_png(cropped_16bit_rgb, cropped_16bit_path)
+        if not os.path.exists(cropped_histeq_16bit_path):
+            save_to_png(cropped_histeq_16bit_rgb, cropped_histeq_16bit_path)
 
         # Save cropped, processed segmentation mask
         if unet_model is not None:
