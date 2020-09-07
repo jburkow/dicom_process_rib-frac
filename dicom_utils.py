@@ -3,12 +3,14 @@ Filename: dicom_utils.py
 Authors: Jonathan Burkow, burkowjo@msu.edu
          Greg Holste, holstegr@msu.edu
          Michigan State University
-Last Updated: 08/10/2020
+Last Updated: 09/06/2020
 Description: A collection of utility functions needed to process through
     DICOM files, including thresholding, cropping, histogram
     equalization, and saving to PNGs.
 '''
 
+import os
+import math
 import numpy as np
 import matplotlib.pyplot as plt
 import cv2
@@ -485,7 +487,7 @@ def load_dicom_image(dicom_file, verbose=False):
 
     return image.astype(float)
 
-def crop_dicom(dicom_file, mm_spacing=5, verbose=False, crop_region='center', model=None):
+def crop_dicom(image, pixel_spacing=None, verbose=False, crop_region='center', model=None):
     """
     Full function to crop a DICOM image. The pixel array is cropped
     through two stages: the first does a rough crop to center on the
@@ -495,11 +497,10 @@ def crop_dicom(dicom_file, mm_spacing=5, verbose=False, crop_region='center', mo
 
     Parameters
     ----------
-    dicom_file : PyDICOM dataset
-        the DICOM file read in by PyDicom
-    mm_spacing : int
-        the physical spacing (in mm) to add around the borders
-        after the region crop; determined by ImagerPixelSpacing
+    image : ndarray
+        array of the original DICOM image
+    pixel_spacing : float
+        the physical spacing between pixels from the imaging device
     verbose : bool
         If True, print out each stage of image processing steps
     crop_region : str
@@ -511,19 +512,14 @@ def crop_dicom(dicom_file, mm_spacing=5, verbose=False, crop_region='center', mo
 
     Returns
     -------
-    image : ndarray
-        the fully processed and cropped image array
     y_pred : ndarray
         fully processed and cropped segmentation mask
-    offsets : int, (top, bottom, left, right)
+    indices : int, (top, bottom, left, right)
         the pixel offsets needed to adjust annotations
     """
-    # Load the image in from the dicom file
-    image = load_dicom_image(dicom_file, verbose=verbose)
-    orig_image_shape = image.shape
-
     # Make a copy of the image to modify
     image_copy = image.copy()
+    orig_image_shape = image.shape
 
     # Threshold the image copy for improved cropping
     image_copy = threshold_image(image_copy, method='li', verbose=verbose)
@@ -533,7 +529,6 @@ def crop_dicom(dicom_file, mm_spacing=5, verbose=False, crop_region='center', mo
 
     # Get the index offsets from the region crop stage or U-Net segmentation
     if model is not None:
-        pixel_spacing = dicom_file.ImagerPixelSpacing if hasattr(dicom_file, "ImagerPixelSpacing") else None
         cat_y_pred, region_offsets = unet_crop(image_copy, pixel_spacing, model, verbose=verbose)
 
         # If U-Net failed, revert to non-U-Net region crop
@@ -549,22 +544,10 @@ def crop_dicom(dicom_file, mm_spacing=5, verbose=False, crop_region='center', mo
             region_offsets = get_center_crop_offsets(image_copy, verbose=verbose)
 
     # Calculate overall indices to crop the original image
-    # If available, use ImagerPixelSpacing values for additional crop
-    if hasattr(dicom_file, 'ImagerPixelSpacing'):
-        row_spacing = int(mm_spacing / dicom_file.ImagerPixelSpacing[0])
-        col_spacing = int(mm_spacing / dicom_file.ImagerPixelSpacing[1])
-        indices = (max(0, init_crop[0] + region_offsets[0] - row_spacing),
-                   min(image.shape[0], init_crop[1] - region_offsets[1] + row_spacing),
-                   max(0, init_crop[2] + region_offsets[2] - col_spacing),
-                   min(image.shape[1], init_crop[3] - region_offsets[3] + col_spacing))
-    else:
-        indices = (max(0, init_crop[0] + region_offsets[0]),
-                   min(image.shape[0], init_crop[1] - region_offsets[1]),
-                   max(0, init_crop[2] + region_offsets[2]),
-                   min(image.shape[1], init_crop[3] - region_offsets[3]))
-
-    # Crop the original image based on indices from both crop stages
-    image = image[indices[0]:indices[1], indices[2]:indices[3]]
+    indices = (max(0, init_crop[0] + region_offsets[0]),
+               min(image.shape[0], init_crop[1] - region_offsets[1]),
+               max(0, init_crop[2] + region_offsets[2]),
+               min(image.shape[1], init_crop[3] - region_offsets[3]))
 
     # Plot the final cropped image
     if verbose: plot_image(image, title='Final Cropped Image')
@@ -576,9 +559,9 @@ def crop_dicom(dicom_file, mm_spacing=5, verbose=False, crop_region='center', mo
         cat_y_pred = cat_y_pred[indices[0]:indices[1], indices[2]:indices[3]]
         y_pred = to_one_hot(cat_y_pred)   # convert to one-hot (h, w, 8)
 
-        return image, y_pred, indices
+        return y_pred, indices
     else:
-        return image, indices
+        return indices
 
 def plot_image(image, cmap='gray', title='', axis=True):
     """
@@ -588,6 +571,18 @@ def plot_image(image, cmap='gray', title='', axis=True):
     plt.imshow(image, cmap=cmap)
     plt.title(title)
     if not axis: plt.axis('off')
+
+def create_dir(dir_path):
+    """
+    Shortcut function to create a directory if it doesn't already exist.
+
+    Parameters
+    ----------
+    dir_path : str
+        path of the directory to create
+    """
+    if not os.path.isdir(dir_path):
+        os.mkdir(dir_path)
 
 def save_to_npy(y_pred, save_loc):
     """
@@ -602,7 +597,7 @@ def save_to_npy(y_pred, save_loc):
     """
     np.save(save_loc, y_pred)
 
-def save_to_png(image_array, save_loc):
+def save_to_png(image_array, save_loc, overwrite=False):
     """
     Save the image array to a RGB PNG file.
 
@@ -612,8 +607,14 @@ def save_to_png(image_array, save_loc):
         the fully processed DICOM image
     save_loc : str
         directory location and filename to save the PNG to
+    overwrite : bool
+        True/False on whether to overwrite an existing image
     """
-    numpngw.write_png(save_loc, image_array)
+    if overwrite:
+        numpngw.write_png(save_loc, image_array)
+    else:
+        if not os.path.exists(save_loc):
+            numpngw.write_png(save_loc, image_array)
 
 def scale_image_to_depth(image, bit_depth):
     """
@@ -698,3 +699,48 @@ def hist_equalization(image, method='hand', bit_depth=16, verbose=False):
     if verbose: plot_image(hist_eq_img, title='Histogram Equalized Image')
 
     return hist_eq_img
+
+def extract_bboxes(annotation_data):
+    """
+    Pull out the top left and bottom right (x,y) locations for boundary
+    boxes.
+
+    Parameters
+    ----------
+    annotation_data : dict
+        information for the DICOM image annotations
+
+    Returns
+    -------
+    tl_xs : list
+        list of top left boundary box x-values
+    tl_ys : list
+        list of top left boundary box y-values
+    br_xs : list
+        list of bottom right boundary box x-values
+    br_ys : list
+        list of bottom right boundary box y-values
+    """
+    tl_xs = []
+    tl_ys = []
+    br_xs = []
+    br_ys = []
+    for pt in zip(annotation_data['rectangles']['start_points'], annotation_data['rectangles']['end_points']):
+        x1 = math.floor(pt[0][0])
+        y1 = math.floor(pt[0][1])
+        x2 = math.ceil(pt[1][0])
+        y2 = math.ceil(pt[1][1])
+
+        # If box was made from right to left, flip x values
+        if x2 < x1:
+            x1, x2 = x2, x1
+        # If box was made from bottom to top, flip y values
+        if y2 < y1:
+            y1, y2 = y2, y1
+
+        tl_xs.append(x1)
+        tl_ys.append(y1)
+        br_xs.append(x2)
+        br_ys.append(y2)
+
+    return tl_xs, tl_ys, br_xs, br_ys
