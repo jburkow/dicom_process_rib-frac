@@ -163,8 +163,9 @@ for i, file in enumerate(dataset_list):
         else:
             final_indices = minmax_indices
 
-        # Crop image
+        # Crop image and segmentation mask together
         cropped_image = original_image.copy()[final_indices[0]:final_indices[1], final_indices[2]:final_indices[3]]
+        cropped_pred_mask = pred_mask[final_indices[0]:final_indices[1], final_indices[2]:final_indices[3], :]
 
         # Do histogram equalization on the cropped image
         original_histeq_image = hist_equalization(original_image, method='skimage')
@@ -250,7 +251,7 @@ for i, file in enumerate(dataset_list):
 
         # Save cropped, processed segmentation mask
         if unet_model is not None:
-            save_to_npy(pred_mask, cropped_seg_mask_path)
+            save_to_npy(cropped_pred_mask, cropped_seg_mask_path)
 
     except Exception as e:
         print('') # End print stream from loop

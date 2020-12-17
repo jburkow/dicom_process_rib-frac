@@ -417,7 +417,6 @@ def unet_crop(image, pixel_spacing, model, verbose=False):
     image_copy = (image_copy - np.min(image_copy)) / (np.max(image_copy) - np.min(image_copy))
 
     # Predict segementation mask with U-Net and check if "failed"
-    # y_pred = model.predict(image_copy[np.newaxis, ...]).squeeze(axis=0)  # remove "batch" dimension
     y_pred = model.predict(image_copy[np.newaxis, ..., np.newaxis]).squeeze(axis=0)  # remove "batch" dimension
     y_pred = to_binary(y_pred)  # threshold to one-hot
 
@@ -428,12 +427,12 @@ def unet_crop(image, pixel_spacing, model, verbose=False):
     # and check if U-Net has "failed"
     cat_y_pred, unet_failed = postprocess(cat_y_pred, pixel_spacing)
 
+    # Resize prediction to rough crop dimensions to obtain proper offsets (OPENCV NEEDS (W, H) TUPLE FOR RESIZE)
+    cat_y_pred = cv2.resize(cat_y_pred, (image.shape[1], image.shape[0]), interpolation=cv2.INTER_NEAREST)
+
     # Return nonsense offsets if U-Net segmentation "failed"
     if unet_failed:
         return cat_y_pred, (-1, -1, -1, -1)
-
-    # Resize prediction to rough crop dimensions
-    cat_y_pred = cv2.resize(cat_y_pred, image.shape, interpolation=cv2.INTER_NEAREST)
 
     # Find offsets based on processed, predicted mask
     offsets = get_unet_offsets(cat_y_pred)
@@ -553,11 +552,11 @@ def crop_dicom(image, pixel_spacing=None, verbose=False, crop_region='center', m
     if verbose: plot_image(image, title='Final Cropped Image')
 
     if model is not None:
-        # Upscale segmentation mask to original image dimensions
-        cat_y_pred = cv2.resize(cat_y_pred, orig_image_shape, interpolation=cv2.INTER_NEAREST)
-        # Crop segmentation mask based on same indices
-        cat_y_pred = cat_y_pred[indices[0]:indices[1], indices[2]:indices[3]]
-        y_pred = to_one_hot(cat_y_pred)   # convert to one-hot (h, w, 8)
+        # Upscale segmentation mask to original image dimensions (OPENCV EXPECTS (W, H) TUPLE)
+        cat_y_pred = cv2.resize(cat_y_pred, (orig_image_shape[1], orig_image_shape[0]), interpolation=cv2.INTER_NEAREST)
+        
+        # Convert to one-hot (H, W, n_classes)
+        y_pred = to_one_hot(cat_y_pred)
 
         return y_pred, indices
     else:
