@@ -28,7 +28,7 @@ def main():
 
     # Create a list of all DICOM files
     full_dataset_list = []
-    for dirs, root, files in os.walk(args.ARGS['DICOM_FOLDER']):
+    for dirs, _, files in os.walk(args.ARGS['DICOM_FOLDER']):
         for file in files:
             full_dataset_list.append(os.path.join(dirs, file))
 
