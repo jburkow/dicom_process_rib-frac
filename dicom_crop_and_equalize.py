@@ -2,7 +2,7 @@
 Filename: dicom_crop_and_equalize.py
 Author: Jonathan Burkow, burkowjo@msu.edu
         Michigan State University
-Last Updated: 09/06/2020
+Last Updated: 01/18/2021
 Description: Loops through the list of DICOM files with image
     information and crops the image, and performs histogram
     equalization. Versions of the original, cropped, and equalized
@@ -51,24 +51,6 @@ cropped_equalized_16bit_folder = os.path.join(folder_16bit, args.ARGS['CROPPED_E
 # Set up segmentation mask directory path
 folder_seg_mask = args.ARGS['SEG_MASK_FOLDER']
 cropped_seg_mask_folder = os.path.join(folder_seg_mask, args.ARGS['CROPPED_MASK_FOLDER'])
-
-# Create directories for 8-bit images
-create_dir(folder_8bit)
-create_dir(original_8bit_folder)
-create_dir(original_equalized_8bit_folder)
-create_dir(cropped_8bit_folder)
-create_dir(cropped_equalized_8bit_folder)
-
-# Create directories for 16-bit images
-create_dir(folder_16bit)
-create_dir(original_16bit_folder)
-create_dir(original_equalized_16bit_folder)
-create_dir(cropped_16bit_folder)
-create_dir(cropped_equalized_16bit_folder)
-
-# Create directories for segmentation masks
-create_dir(folder_seg_mask)
-create_dir(cropped_seg_mask_folder)
 
 # Import the dataset list
 dataset_list = []
