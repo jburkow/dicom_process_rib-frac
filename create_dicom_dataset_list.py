@@ -2,7 +2,7 @@
 Filename: create_dicom_dataset_list.py
 Author: Jonathan Burkow, burkowjo@msu.edu
         Michigan State University
-Last Updated: 01/18/2021
+Last Updated: 01/19/2021
 Description: Goes through the provided dataset location of DICOM files
     and creates a file listing all which have annotations.
 
@@ -34,20 +34,26 @@ def main():
 
     # Create list of annotated DICOM files
     annotated_dicoms = []
-    for dcm_file in os.listdir(args.ARGS['DICOM_FOLDER']):
-        file_path = os.path.join(args.ARGS['DICOM_FOLDER'], dcm_file)
-        dcm = dcmread(file_path)
+    for i, dcm_file in enumerate(full_dataset_list):
+        print('Processing DICOM {} of {} ({:.1f}%).'.format(i+1, len(full_dataset_list), (i+1)/len(full_dataset_list)*100),
+              end='\r', flush=True)
 
+        # Load in DICOM file
+        dcm = dcmread(dcm_file)
+
+        # Extract InstanceUID from header data
         dcm_instance_uid = dcm.SOPInstanceUID
 
+        # If InstanceUID matches an annotated UID, store it
         if dcm_instance_uid in instance_uids:
-            annotated_dicoms.append(file_path)
+            annotated_dicoms.append(dcm_file)
+    print('') # End print stream from loop
 
-    # Print out number of DICOM files and how many have pixel information
-    print('Total number of DICOM files:', len(full_dataset_list))
+    # Print out number of DICOM files that have annotations
     print('Annotated DICOM files:', len(annotated_dicoms))
 
-    # Save the list of paths to DICOM files with pixel information to a file
+    # Save the list of paths to DICOM files with annotations to a file
+    print('Writing to file...')
     with open(args.ARGS['DATASET_LIST'], 'w+') as out_file:
         for row in annotated_dicoms:
             out_str = row + '\n'
