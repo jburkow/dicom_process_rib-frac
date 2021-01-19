@@ -571,18 +571,6 @@ def plot_image(image, cmap='gray', title='', axis=True):
     plt.title(title)
     if not axis: plt.axis('off')
 
-def create_dir(dir_path):
-    """
-    Shortcut function to create a directory if it doesn't already exist.
-
-    Parameters
-    ----------
-    dir_path : str
-        path of the directory to create
-    """
-    if not os.path.isdir(dir_path):
-        os.mkdir(dir_path)
-
 def save_to_npy(y_pred, save_loc):
     """
     Save NumPy array to a .npy file.
