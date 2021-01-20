@@ -10,7 +10,6 @@ Description: Loops through the list of DICOM files with image
     with the original and cropped annotation information are also saved.
 '''
 import argparse
-import csv
 import os
 import time
 import json
@@ -20,16 +19,10 @@ from dicom_utils import (load_dicom_image, crop_dicom, hist_equalization, create
                          scale_image_to_depth, save_to_png, save_to_npy, extract_bboxes)
 import args
 from unet_utils import Unet
+from general_utils import read_file
 
 def main(parse_args):
     """Main Function"""
-    # If --unet was used, load U-Net model
-    if parse_args.unet:
-        unet_model = Unet(img_height=256, img_width=256, n_classes=8, n_filters=32)
-        unet_model.load_weights(parse_args.model_weights)
-    else:
-        unet_model = None
-
     # Set up 8-bit directory paths
     folder_8bit = args.ARGS['8_BIT_FOLDER']
     original_8bit_folder = os.path.join(folder_8bit, args.ARGS['ORIGINAL_IMAGE_FOLDER'])
@@ -45,21 +38,21 @@ def main(parse_args):
     cropped_equalized_16bit_folder = os.path.join(folder_16bit, args.ARGS['CROPPED_EQUALIZED_IMAGE_FOLDER'])
 
     # Set up segmentation mask directory path
-    folder_seg_mask = args.ARGS['SEG_MASK_FOLDER']
-    cropped_seg_mask_folder = os.path.join(folder_seg_mask, args.ARGS['CROPPED_MASK_FOLDER'])
+    original_seg_mask_folder = os.path.join(args.ARGS['SEG_MASK_FOLDER'], args.ARGS['ORIGINAL_MASK_FOLDER'])
+    cropped_seg_mask_folder = os.path.join(args.ARGS['SEG_MASK_FOLDER'], args.ARGS['CROPPED_MASK_FOLDER'])
 
     # Import the dataset list
-    dataset_list = []
-    with open(args.ARGS['DATASET_LIST'], 'r') as data_file:
-        for line in data_file:
-            dataset_list.append(line.replace('\n', ''))
+    dataset_list = read_file(args.ARGS['DATASET_LIST'])
 
     # Import the annotated Instance UIDs
-    instance_uids = []
-    with open(args.ARGS['INSTANCE_UID_FILENAME'], 'r') as data_file:
-        csv_reader = csv.reader(data_file)
-        for line in csv_reader:
-            instance_uids.append(line[0])
+    instance_uids = read_file(args.ARGS['INSTANCE_UID_FILENAME'])
+
+    # If --unet was used, load U-Net model
+    if parse_args.unet:
+        unet_model = Unet(img_height=256, img_width=256, n_classes=8, n_filters=32)
+        unet_model.load_weights(parse_args.model_weights)
+    else:
+        unet_model = None
 
     # Loop through all dicom files and process all annotated instances
     offset_list = []
@@ -67,17 +60,38 @@ def main(parse_args):
     original_annotations = []
     offset_annotations = []
     for i, file in enumerate(dataset_list):
-        if args.ARGS['BREAK'] and i == args.ARGS['CROP_BREAK_NUM']:
+        # Break after a certain number of images, if desired
+        if parse_args.break_loop and i == parse_args.break_num:
             break
 
         try:
-            print('Processing image {} of {} ({}%).'.format(i+1,
-                                                            len(dataset_list),
-                                                            round((i+1)/len(dataset_list)*100, 1)),
-                end='\r', flush=True)
+            print('Processing image {} of {} ({}%).'.format(i+1, len(dataset_list), round((i+1)/len(dataset_list)*100, 1)),
+                  end='\r', flush=True)
 
             # Grab Patient ID
             patient_id = file[file.rfind('/')+1:file.rfind('_')]
+
+            # Check whether files already exist in all 4 sub-folders. If so, continue to next image
+            if not parse_args.overwrite:
+                count_8bit = 0
+                count_16bit = 0
+                for _, _, files in os.walk(folder_8bit):
+                    if patient_id + '.png' in files:
+                        count_8bit += 1
+                for _, _, files in os.walk(folder_16bit):
+                    if patient_id + '.png' in files:
+                        count_16bit += 1
+
+                if count_8bit == 4 and count_16bit == 4:
+                    continue
+
+            # Load in dicom file
+            dcm = dcmread(file)
+
+            # Check if InstanceUID is in the list of annotated instances.
+            # If not, continue to next dicom file.
+            if dcm.SOPInstanceUID not in instance_uids:
+                continue
 
             # Pull the corresponding annotation filename from annotation folder
             annotation_filename = [fname for fname in os.listdir(args.ARGS['ANNOTATION_FOLDER']) if patient_id in fname]
@@ -89,32 +103,8 @@ def main(parse_args):
             # Extract lists of bounding box points from annotation file
             tl_xs, tl_ys, br_xs, br_ys = extract_bboxes(annotation_data)
 
-            # Check whether files already exist in all 4 sub-folders. If so, continue to next image
-            COUNT_8BIT = 0
-            COUNT_16BIT = 0
-            for _, _, files in os.walk(folder_8bit):
-                if patient_id + '.png' in files:
-                    COUNT_8BIT += 1
-            for _, _, files in os.walk(folder_16bit):
-                if patient_id + '.png' in files:
-                    COUNT_16BIT += 1
-
-            # if COUNT_8BIT == 4 and COUNT_16BIT == 4:
-            #     continue
-
-            # Load in dicom file
-            dcm = dcmread(file)
-
-            # Pull out the InstanceUID of the dicom file
-            instance_uid = dcm.SOPInstanceUID
-
             # Pull out ImagerPixelSpacing if it is available
             PIXEL_SPACING = dcm.ImagerPixelSpacing if hasattr(dcm, "ImagerPixelSpacing") else None
-
-            # Check if InstanceUID is in the list of annotated instances.
-            # If not, continue to next dicom file.
-            if instance_uid not in instance_uids:
-                continue
 
             # Load in original image and get indices to crop
             original_image = load_dicom_image(dcm)
@@ -126,18 +116,18 @@ def main(parse_args):
             # Compare crop indices to bounding boxes
             # If bounding boxes are outside of crop indices, use bounding box indices to crop
             minmax_indices = (min(offsets[0], min(tl_ys)),
-                            max(offsets[1], max(br_ys)),
-                            min(offsets[2], min(tl_xs)),
-                            max(offsets[3], max(br_xs)))
+                              max(offsets[1], max(br_ys)),
+                              min(offsets[2], min(tl_xs)),
+                              max(offsets[3], max(br_xs)))
 
             # Use ImagerPixelSpacing if available to add buffer to all sides
             if PIXEL_SPACING is not None:
                 row_spacing = int(parse_args.mm_spacing / PIXEL_SPACING[0])
                 col_spacing = int(parse_args.mm_spacing / PIXEL_SPACING[1])
                 final_indices = (max(0, minmax_indices[0] - row_spacing),
-                                min(original_image.shape[0], minmax_indices[1] + row_spacing),
-                                max(0, minmax_indices[2] - col_spacing),
-                                min(original_image.shape[1], minmax_indices[3] + col_spacing))
+                                 min(original_image.shape[0], minmax_indices[1] + row_spacing),
+                                 max(0, minmax_indices[2] - col_spacing),
+                                 min(original_image.shape[1], minmax_indices[3] + col_spacing))
             else:
                 final_indices = minmax_indices
 
@@ -213,29 +203,30 @@ def main(parse_args):
             cropped_16bit_path = os.path.join(cropped_16bit_folder, patient_id + '.png')
             cropped_histeq_16bit_path = os.path.join(cropped_equalized_16bit_folder, patient_id + '.png')
 
+            # Save the images to their respective folders
+            save_to_png(original_8bit_rgb, original_8bit_path, overwrite=parse_args.overwrite)
+            save_to_png(original_histeq_8bit_rgb, original_histeq_8bit_path, overwrite=parse_args.overwrite)
+            save_to_png(cropped_8bit_rgb, cropped_8bit_path, overwrite=parse_args.overwrite)
+            save_to_png(cropped_histeq_8bit_rgb, cropped_histeq_8bit_path, overwrite=parse_args.overwrite)
+
+            save_to_png(original_16bit_rgb, original_16bit_path, overwrite=parse_args.overwrite)
+            save_to_png(original_histeq_16bit_rgb, original_histeq_16bit_path, overwrite=parse_args.overwrite)
+            save_to_png(cropped_16bit_rgb, cropped_16bit_path, overwrite=parse_args.overwrite)
+            save_to_png(cropped_histeq_16bit_rgb, cropped_histeq_16bit_path, overwrite=parse_args.overwrite)
+
             # Set filename for cropped, processed segmentation mask
+            original_seg_mask_path = os.path.join(original_seg_mask_folder, patient_id + '.npy')
             cropped_seg_mask_path = os.path.join(cropped_seg_mask_folder, patient_id + '.npy')
 
-            # Save the images to their respective folders
-            save_to_png(original_8bit_rgb, original_8bit_path)
-            save_to_png(original_histeq_8bit_rgb, original_histeq_8bit_path)
-            save_to_png(cropped_8bit_rgb, cropped_8bit_path)
-            save_to_png(cropped_histeq_8bit_rgb, cropped_histeq_8bit_path)
-
-            save_to_png(original_16bit_rgb, original_16bit_path)
-            save_to_png(original_histeq_16bit_rgb, original_histeq_16bit_path)
-            save_to_png(cropped_16bit_rgb, cropped_16bit_path)
-            save_to_png(cropped_histeq_16bit_rgb, cropped_histeq_16bit_path)
-
-            # Save cropped, processed segmentation mask
+            # Save processed original size and cropped segmentation mask
             if unet_model is not None:
+                save_to_npy(pred_mask, original_seg_mask_path)
                 save_to_npy(cropped_pred_mask, cropped_seg_mask_path)
 
         except Exception as e:
             print('') # End print stream from loop
             print(e)
             failed_list.append(patient_id)
-
     print('') # End print stream from loop
 
     # Print out failed-to-process images:
@@ -245,31 +236,42 @@ def main(parse_args):
 
     # Export the list of offsets to a file
     # Rows are (IMG, X_OFFSET, Y_OFFSET)
-    if not args.ARGS['BREAK']:
+    if not parse_args.break_loop:
         with open(args.ARGS['OFFSET_FILENAME'], 'w') as out_file:
             for line in offset_list:
-                OUT_STR = line + '\n'
-                out_file.write(OUT_STR)
+                out_str = line + '\n'
+                out_file.write(out_str)
 
     # Export original and offset annotation lists to files
     orig_annotations_df = pd.DataFrame(original_annotations, columns=(['ID', 'height', 'width', 'x1', 'y1', 'x2', 'y2']))
-    orig_annotations_df.to_csv(args.ARGS['ANNOTATION_OG_FILENAME'], index=False, header=False)
-
     offset_annotations_df = pd.DataFrame(offset_annotations, columns=(['ID', 'height', 'width', 'x1', 'y1', 'x2', 'y2']))
-    offset_annotations_df.to_csv(args.ARGS['ANNOTATION_OFFSET_FILENAME'], index=False, header=False)
+
+    # Save files only when loop isn't being broken (i.e., tested)
+    if not parse_args.break_loop:
+        orig_annotations_df.to_csv(args.ARGS['ANNOTATION_OG_FILENAME'], index=False, header=False)
+        offset_annotations_df.to_csv(args.ARGS['ANNOTATION_OFFSET_FILENAME'], index=False, header=False)
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Pre-process all images by cropping and equalizing them. Saves images as both 8-bit and 16-bit.')
 
     parser.add_argument('--unet', action='store_true',
-                        help='Determine whether to ')
+                        help='Utilize a trained U-Net for second-stage cropping.')
+
+    parser.add_argument('--overwrite', action='store_true',
+                        help='Overwrite existing images.')
 
     parser.add_argument('--model_weights', default='aug_unet_256_32f_cce_071019_weights.h5',
                         help='Filename/path to the model weights to load into U-Net.')
 
     parser.add_argument('--mm_spacing', type=int, default=5,
                         help='Amount of buffer to add around the image post-cropping (in mm).')
+
+    parser.add_argument('--break_loop', action='store_true',
+                        help='Condition to break the loop early after break_num iterations.')
+
+    parser.add_argument('--break_num', type=int, default=5,
+                        help='Number of iterations to break loop after.')
 
     parser_args = parser.parse_args()
 
