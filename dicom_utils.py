@@ -19,6 +19,49 @@ import numpngw
 from unet_utils import to_binary, to_one_hot, postprocess, get_unet_offsets
 from general_utils import plot_image
 
+def load_dicom_image(dicom_file, verbose=False):
+    """
+    Load in the image array from the dicom file.
+
+    Parameters
+    ----------
+    dicom_file : PyDICOM dataset
+        the DICOM file read in by PyDicom
+    verbose : bool
+        If True, print out the original image
+
+    Returns
+    -------
+    image : ndarray
+        the image array
+    """
+    # Pull out the image array from the dicom file.
+    # Depending on DICOM Photometric Interpretation value, invert the image.
+    # RGB : convert to 1-channel grayscale
+    # MONOCHROME1 : values close to 0 appear white => invert
+    # MONOCHROME2 : values close to 0 appear black => keep original
+    if dicom_file.PhotometricInterpretation == 'RGB':
+        image = color.rgb2gray(dicom_file.pixel_array.copy())
+    elif dicom_file.PhotometricInterpretation == 'MONOCHROME1':
+        image = invert_image(dicom_file.pixel_array.copy().astype('uint16'))
+    else:
+        image = dicom_file.pixel_array.copy()
+
+    # Retrieve pixel intensity data from the dicom file
+    # Rescale array values to ensure pixel intensities reflect original data
+    try:
+        slope = float(dicom_file.RescaleSlope)
+        intercept = float(dicom_file.RescaleIntercept)
+    except:
+        slope = 1.0
+        intercept = 0.0
+    image = slope * image + intercept
+
+    # Plot the image from the dicom file
+    if verbose: plot_image(image, title='Original Image')
+
+    return image.astype(float)
+
 def invert_image(image):
     """
     If the image has reversed intensity values, i.e., values close to 0
@@ -32,24 +75,7 @@ def invert_image(image):
     """
     return np.invert(image) - np.invert(image).min()
 
-def create_rgb(image):
-    """
-    Stack the array to create a 3-channel RGB array.
 
-    Parameters
-    ----------
-    image : ndarray
-        single-channel array of the image
-
-    Returns
-    -------
-    image : ndarray
-        three-channel array of the image
-    """
-    # Stack the array three times for RGB channels
-    image = np.stack([image, image, image], axis=-1)
-
-    return image
 
 def threshold_image(image, method='li', verbose=False):
     """
@@ -156,7 +182,7 @@ def rough_crop(image, blank_dist=20, verbose=False):
     # Set bottom bound too min nonzero index if no black space exists
     if bottom_bound < 0: bottom_bound = row_nonzero.max()
 
-    # Store the offsets
+    # Store the rough crop indices
     top = int(top_bound)
     bottom = int(bottom_bound) + 1
     left = int(left_bound)
@@ -164,7 +190,7 @@ def rough_crop(image, blank_dist=20, verbose=False):
 
     indices = (top, bottom, left, right)
 
-    # Crop the image based on initial crop indices
+    # Crop the original image based on rough crop indices
     image = image[top:bottom, left:right]
 
     # Plot the current stage of the image and print crop indices
@@ -444,49 +470,6 @@ def unet_crop(image, pixel_spacing, model, verbose=False):
 
     return cat_y_pred, offsets
 
-def load_dicom_image(dicom_file, verbose=False):
-    """
-    Load in the image array from the dicom file.
-
-    Parameters
-    ----------
-    dicom_file : PyDICOM dataset
-        the DICOM file read in by PyDicom
-    verbose : bool
-        If True, print out the original image
-
-    Returns
-    -------
-    image : ndarray
-        the image array
-    """
-    # Pull out the image array from the dicom file.
-    # Depending on DICOM Photometric Interpretation value, invert the image.
-    # RGB : convert to 1-channel grayscale
-    # MONOCHROME1 : values close to 0 appear white => invert
-    # MONOCHROME2 : values close to 0 appear black => keep original
-    if dicom_file.PhotometricInterpretation == 'RGB':
-        image = color.rgb2gray(dicom_file.pixel_array.copy())
-    elif dicom_file.PhotometricInterpretation == 'MONOCHROME1':
-        image = invert_image(dicom_file.pixel_array.copy().astype('uint16'))
-    else:
-        image = dicom_file.pixel_array.copy()
-
-    # Retrieve pixel intensity data from the dicom file
-    # Rescale array values to ensure pixel intensities reflect original data
-    try:
-        slope = float(dicom_file.RescaleSlope)
-        intercept = float(dicom_file.RescaleIntercept)
-    except:
-        slope = 1.0
-        intercept = 0.0
-    image = slope * image + intercept
-
-    # Plot the image from the dicom file
-    if verbose: plot_image(image, title='Original Image')
-
-    return image.astype(float)
-
 def crop_dicom(image, pixel_spacing=None, verbose=False, crop_region='center', model=None):
     """
     Full function to crop a DICOM image. The pixel array is cropped
@@ -506,7 +489,7 @@ def crop_dicom(image, pixel_spacing=None, verbose=False, crop_region='center', m
     crop_region : str
         determine between quadrant or center regions to determine
         the second stage of cropping
-    model : Tensorflow model
+    model : TensorFlow model
         U-Net architecture model to use instance segmentation instead
         of region crop for second stage of cropping
 
@@ -543,7 +526,7 @@ def crop_dicom(image, pixel_spacing=None, verbose=False, crop_region='center', m
         elif crop_region == 'center':
             region_offsets = get_center_crop_offsets(image_copy, verbose=verbose)
 
-    # Calculate overall indices to crop the original image
+    # Calculate rough crop + unet/region crop indices
     indices = (max(0, init_crop[0] + region_offsets[0]),
                min(image.shape[0], init_crop[1] - region_offsets[1]),
                max(0, init_crop[2] + region_offsets[2]),
@@ -553,8 +536,9 @@ def crop_dicom(image, pixel_spacing=None, verbose=False, crop_region='center', m
     if verbose: plot_image(image, title='Final Cropped Image')
 
     if model is not None:
-        # Upscale segmentation mask to original image dimensions (OPENCV EXPECTS (W, H) TUPLE)
-        cat_y_pred = cv2.resize(cat_y_pred, (orig_image_shape[1], orig_image_shape[0]), interpolation=cv2.INTER_NEAREST)
+        # Pad pred array with zeros based on rough crop indices to match original image shape
+        cat_y_pred = np.pad(cat_y_pred, [(init_crop[0], orig_image_shape[0] - init_crop[1]),
+                                         (init_crop[2], orig_image_shape[1] - init_crop[3])])
         
         # Convert to one-hot (H, W, n_classes)
         y_pred = to_one_hot(cat_y_pred)
@@ -576,6 +560,25 @@ def save_to_npy(y_pred, save_loc):
     """
     np.save(save_loc, y_pred)
 
+def create_rgb(image):
+    """
+    Stack the array to create a 3-channel RGB array.
+
+    Parameters
+    ----------
+    image : ndarray
+        single-channel array of the image
+
+    Returns
+    -------
+    image : ndarray
+        three-channel array of the image
+    """
+    # Stack the array three times for RGB channels
+    image = np.stack([image, image, image], axis=-1)
+
+    return image
+
 def save_to_png(image_array, save_loc, overwrite=False):
     """
     Save the image array to a RGB PNG file.
@@ -594,35 +597,6 @@ def save_to_png(image_array, save_loc, overwrite=False):
     else:
         if not os.path.exists(save_loc):
             numpngw.write_png(save_loc, image_array)
-
-def read_file(file, ind=0):
-    """
-    Read in the file and return a list of its contents.
-
-    Parameters
-    ----------
-    file : str
-        path to the file to be read in
-    ind : int
-        index to use to pull info from each line (only used for csvs)
-    
-    Returns
-    -------
-    file_list : list
-        list of contents of each row from the data file
-    """
-    temp_list = []
-    if file[-4:] == '.csv':
-        with open(file, 'r') as data_file:
-            csv_reader = csv.reader(data_file)
-            for line in csv_reader:
-                temp_list.append(line[ind])
-    else:
-        with open(file, 'r') as data_file:
-            for line in data_file:
-                temp_list.append(line.replace('\n', ''))
-    
-    return temp_list
 
 def scale_image_to_depth(image, bit_depth):
     """
@@ -645,7 +619,8 @@ def scale_image_to_depth(image, bit_depth):
     # Return image as specific datatype based on bit depth
     if bit_depth == 8:
         return image.astype('uint8')
-    elif bit_depth == 16:
+
+    if bit_depth == 16:
         return image.astype('uint16')
 
 def hist_equalization(image, method='hand', bit_depth=16, verbose=False):
