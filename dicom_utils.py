@@ -10,13 +10,14 @@ Description: A collection of utility functions needed to process through
 '''
 
 import os
+import csv
 import math
 import numpy as np
-import matplotlib.pyplot as plt
 import cv2
 from skimage import exposure, color, filters
 import numpngw
 from unet_utils import to_binary, to_one_hot, postprocess, get_unet_offsets
+from general_utils import plot_image
 
 def invert_image(image):
     """
@@ -562,15 +563,6 @@ def crop_dicom(image, pixel_spacing=None, verbose=False, crop_region='center', m
     else:
         return indices
 
-def plot_image(image, cmap='gray', title='', axis=True):
-    """
-    Simplified function to create a grayscale plot of the image.
-    """
-    plt.figure(figsize=(8,8))
-    plt.imshow(image, cmap=cmap)
-    plt.title(title)
-    if not axis: plt.axis('off')
-
 def save_to_npy(y_pred, save_loc):
     """
     Save NumPy array to a .npy file.
@@ -602,6 +594,35 @@ def save_to_png(image_array, save_loc, overwrite=False):
     else:
         if not os.path.exists(save_loc):
             numpngw.write_png(save_loc, image_array)
+
+def read_file(file, ind=0):
+    """
+    Read in the file and return a list of its contents.
+
+    Parameters
+    ----------
+    file : str
+        path to the file to be read in
+    ind : int
+        index to use to pull info from each line (only used for csvs)
+    
+    Returns
+    -------
+    file_list : list
+        list of contents of each row from the data file
+    """
+    temp_list = []
+    if file[-4:] == '.csv':
+        with open(file, 'r') as data_file:
+            csv_reader = csv.reader(data_file)
+            for line in csv_reader:
+                temp_list.append(line[ind])
+    else:
+        with open(file, 'r') as data_file:
+            for line in data_file:
+                temp_list.append(line.replace('\n', ''))
+    
+    return temp_list
 
 def scale_image_to_depth(image, bit_depth):
     """
