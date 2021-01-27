@@ -2,7 +2,7 @@
 Filename: check_dimensions.py
 Author: Jonathan Burkow, burkowjo@msu.edu
         Michigan State University
-Last Updated: 01/15/2021
+Last Updated: 01/27/2021
 Description: Loads in the dicom_offsets.csv file, and loops through all
     cropped/equalized images to check whether the annotation offsets
     fall outside the dimensions of the cropped images.
@@ -14,6 +14,7 @@ import time
 import imageio
 import pandas as pd
 import args
+from general_utils import print_iter
 
 def main(parse_args):
     """Main Function"""
@@ -34,8 +35,8 @@ def main(parse_args):
     heights = []
     widths = []
     for i, img in enumerate(imgs):
-        print('Processing image {} of {} ({:.1f}%).'.format(i+1, len(imgs), (i+1)/len(imgs)*100),
-              end='\r', flush=True)
+        print_iter(len(imgs), i, 'image')
+
         img_path = os.path.join(img_folder_path, img)
         image = imageio.imread(img_path)
         heights.append(image.shape[0])

@@ -2,7 +2,7 @@
 Filename: create_dicom_dataset_list.py
 Author: Jonathan Burkow, burkowjo@msu.edu
         Michigan State University
-Last Updated: 01/19/2021
+Last Updated: 01/27/2021
 Description: Goes through the provided dataset location of DICOM files
     and creates a file listing all which have annotations.
 
@@ -16,6 +16,7 @@ import csv
 import time
 from pydicom import dcmread
 import args
+from general_utils import print_iter
 
 def main():
     """Main Function"""
@@ -35,8 +36,7 @@ def main():
     # Create list of annotated DICOM files
     annotated_dicoms = []
     for i, dcm_file in enumerate(full_dataset_list):
-        print('Processing DICOM {} of {} ({:.1f}%).'.format(i+1, len(full_dataset_list), (i+1)/len(full_dataset_list)*100),
-              end='\r', flush=True)
+        print_iter(len(full_dataset_list), i, 'DICOM')
 
         # Load in DICOM file
         dcm = dcmread(dcm_file)

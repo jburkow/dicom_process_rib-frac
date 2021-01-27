@@ -19,7 +19,7 @@ from dicom_utils import (load_dicom_image, crop_dicom, hist_equalization, create
                          scale_image_to_depth, save_to_png, save_to_npy, extract_bboxes)
 import args
 from unet_utils import Unet
-from general_utils import read_file
+from general_utils import read_file, print_iter
 
 def main(parse_args):
     """Main Function"""
@@ -65,8 +65,7 @@ def main(parse_args):
             break
 
         try:
-            print('Processing image {} of {} ({}%).'.format(i+1, len(dataset_list), round((i+1)/len(dataset_list)*100, 1)),
-                  end='\r', flush=True)
+            print_iter(len(dataset_list), i, 'image')
 
             # Grab Patient ID
             patient_id = file[file.rfind('/')+1:file.rfind('_')]
@@ -204,22 +203,23 @@ def main(parse_args):
             cropped_histeq_16bit_path = os.path.join(cropped_equalized_16bit_folder, patient_id + '.png')
 
             # Save the images to their respective folders
-            save_to_png(original_8bit_rgb, original_8bit_path, overwrite=parse_args.overwrite)
-            save_to_png(original_histeq_8bit_rgb, original_histeq_8bit_path, overwrite=parse_args.overwrite)
-            save_to_png(cropped_8bit_rgb, cropped_8bit_path, overwrite=parse_args.overwrite)
-            save_to_png(cropped_histeq_8bit_rgb, cropped_histeq_8bit_path, overwrite=parse_args.overwrite)
+            if not parse_args.just_annos:
+                save_to_png(original_8bit_rgb, original_8bit_path, overwrite=parse_args.overwrite)
+                save_to_png(original_histeq_8bit_rgb, original_histeq_8bit_path, overwrite=parse_args.overwrite)
+                save_to_png(cropped_8bit_rgb, cropped_8bit_path, overwrite=parse_args.overwrite)
+                save_to_png(cropped_histeq_8bit_rgb, cropped_histeq_8bit_path, overwrite=parse_args.overwrite)
 
-            save_to_png(original_16bit_rgb, original_16bit_path, overwrite=parse_args.overwrite)
-            save_to_png(original_histeq_16bit_rgb, original_histeq_16bit_path, overwrite=parse_args.overwrite)
-            save_to_png(cropped_16bit_rgb, cropped_16bit_path, overwrite=parse_args.overwrite)
-            save_to_png(cropped_histeq_16bit_rgb, cropped_histeq_16bit_path, overwrite=parse_args.overwrite)
+                save_to_png(original_16bit_rgb, original_16bit_path, overwrite=parse_args.overwrite)
+                save_to_png(original_histeq_16bit_rgb, original_histeq_16bit_path, overwrite=parse_args.overwrite)
+                save_to_png(cropped_16bit_rgb, cropped_16bit_path, overwrite=parse_args.overwrite)
+                save_to_png(cropped_histeq_16bit_rgb, cropped_histeq_16bit_path, overwrite=parse_args.overwrite)
 
             # Set filename for cropped, processed segmentation mask
             original_seg_mask_path = os.path.join(original_seg_mask_folder, patient_id + '.npy')
             cropped_seg_mask_path = os.path.join(cropped_seg_mask_folder, patient_id + '.npy')
 
             # Save processed original size and cropped segmentation mask
-            if unet_model is not None:
+            if unet_model is not None and not parse_args.just_annos:
                 save_to_npy(pred_mask, original_seg_mask_path)
                 save_to_npy(cropped_pred_mask, cropped_seg_mask_path)
 
@@ -272,6 +272,9 @@ if __name__ == "__main__":
 
     parser.add_argument('--break_num', type=int, default=5,
                         help='Number of iterations to break loop after.')
+
+    parser.add_argument('--just_annos', action='store_true',
+                        help='Use if you just need to get annotation and offset files remade.')
 
     parser_args = parser.parse_args()
 
