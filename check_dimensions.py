@@ -2,7 +2,7 @@
 Filename: check_dimensions.py
 Author: Jonathan Burkow, burkowjo@msu.edu
         Michigan State University
-Last Updated: 01/27/2021
+Last Updated: 02/04/2021
 Description: Loads in the dicom_offsets.csv file, and loops through all
     cropped/equalized images to check whether the annotation offsets
     fall outside the dimensions of the cropped images.
@@ -13,23 +13,22 @@ import os
 import time
 import imageio
 import pandas as pd
-import args
+from args import ARGS
 from general_utils import print_iter
 
 def main(parse_args):
     """Main Function"""
     # Create list of processed images
-    img_folder_path = os.path.join(args.ARGS['8_BIT_FOLDER'], args.ARGS['CROPPED_EQUALIZED_IMAGE_FOLDER'])
-    imgs = sorted(os.listdir(img_folder_path))
+    imgs = sorted(os.listdir(ARGS['8_BIT_CROP_HISTEQ_IMAGE_FOLDER']))
 
     # Load in offset annotation information
-    anno_df = pd.read_csv(args.ARGS['ANNOTATION_OFFSET_FILENAME'], names=['PatientID', 'x1', 'y1', 'x2', 'y2', 'class'])
+    anno_df = pd.read_csv(ARGS['ANNOTATION_OFFSET_FILENAME'], names=['PatientID', 'x1', 'y1', 'x2', 'y2', 'class'])
 
     # Drop class column
     anno_df = anno_df.drop('class', axis=1)
 
     # Remove paths from PatientID
-    anno_df['PatientID'] = anno_df['PatientID'].str.replace(img_folder_path + '/', '')
+    anno_df['PatientID'] = anno_df['PatientID'].str.replace(ARGS['8_BIT_CROP_HISTEQ_IMAGE_FOLDER'] + '/', '')
 
     # Loop through images and store dimensions in a new DataFrame
     heights = []
@@ -37,7 +36,7 @@ def main(parse_args):
     for i, img in enumerate(imgs):
         print_iter(len(imgs), i, 'image')
 
-        img_path = os.path.join(img_folder_path, img)
+        img_path = os.path.join(ARGS['8_BIT_CROP_HISTEQ_IMAGE_FOLDER'], img)
         image = imageio.imread(img_path)
         heights.append(image.shape[0])
         widths.append(image.shape[1])
