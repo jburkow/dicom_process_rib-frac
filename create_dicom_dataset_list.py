@@ -2,7 +2,7 @@
 Filename: create_dicom_dataset_list.py
 Author: Jonathan Burkow, burkowjo@msu.edu
         Michigan State University
-Last Updated: 01/27/2021
+Last Updated: 02/04/2021
 Description: Goes through the provided dataset location of DICOM files
     and creates a file listing all which have annotations.
 
@@ -12,24 +12,19 @@ Description: Goes through the provided dataset location of DICOM files
 '''
 
 import os
-import csv
 import time
 from pydicom import dcmread
-import args
-from general_utils import print_iter
+from args import ARGS
+from general_utils import print_iter, read_file
 
 def main():
     """Main Function"""
     # Load in InstanceUIDs
-    instance_uids = []
-    with open(args.ARGS['INSTANCE_UID_FILENAME'], 'r') as data_file:
-        csv_reader = csv.reader(data_file)
-        for line in csv_reader:
-            instance_uids.append(line[0])
+    instance_uids = read_file(ARGS['INSTANCE_UID_FILENAME'])
 
     # Create a list of all DICOM files
     full_dataset_list = []
-    for dirs, _, files in os.walk(args.ARGS['DICOM_FOLDER']):
+    for dirs, _, files in os.walk(ARGS['DICOM_FOLDER']):
         for file in files:
             full_dataset_list.append(os.path.join(dirs, file))
 
@@ -54,7 +49,7 @@ def main():
 
     # Save the list of paths to DICOM files with annotations to a file
     print('Writing to file...')
-    with open(args.ARGS['DATASET_LIST'], 'w+') as out_file:
+    with open(ARGS['DATASET_LIST'], 'w+') as out_file:
         for row in annotated_dicoms:
             out_str = row + '\n'
             out_file.write(out_str)
