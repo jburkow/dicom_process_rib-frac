@@ -2,7 +2,7 @@
 Filename: dicom_crop_and_equalize.py
 Author: Jonathan Burkow, burkowjo@msu.edu
         Michigan State University
-Last Updated: 01/19/2021
+Last Updated: 02/04/2021
 Description: Loops through the list of DICOM files with image
     information and crops the image, and performs histogram
     equalization. Versions of the original, cropped, and equalized
