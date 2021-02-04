@@ -17,35 +17,17 @@ import pandas as pd
 from pydicom import dcmread
 from dicom_utils import (load_dicom_image, crop_dicom, hist_equalization, create_rgb,
                          scale_image_to_depth, save_to_png, save_to_npy, extract_bboxes)
-import args
+from args import ARGS
 from unet_utils import Unet
 from general_utils import read_file, print_iter
 
 def main(parse_args):
     """Main Function"""
-    # Set up 8-bit directory paths
-    folder_8bit = args.ARGS['8_BIT_FOLDER']
-    original_8bit_folder = os.path.join(folder_8bit, args.ARGS['ORIGINAL_IMAGE_FOLDER'])
-    original_equalized_8bit_folder = os.path.join(folder_8bit, args.ARGS['ORIGINAL_EQUALIZED_IMAGE_FOLDER'])
-    cropped_8bit_folder = os.path.join(folder_8bit, args.ARGS['CROPPED_IMAGE_FOLDER'])
-    cropped_equalized_8bit_folder = os.path.join(folder_8bit, args.ARGS['CROPPED_EQUALIZED_IMAGE_FOLDER'])
-
-    # Set up 16-bit directory paths
-    folder_16bit = args.ARGS['16_BIT_FOLDER']
-    original_16bit_folder = os.path.join(folder_16bit, args.ARGS['ORIGINAL_IMAGE_FOLDER'])
-    original_equalized_16bit_folder = os.path.join(folder_16bit, args.ARGS['ORIGINAL_EQUALIZED_IMAGE_FOLDER'])
-    cropped_16bit_folder = os.path.join(folder_16bit, args.ARGS['CROPPED_IMAGE_FOLDER'])
-    cropped_equalized_16bit_folder = os.path.join(folder_16bit, args.ARGS['CROPPED_EQUALIZED_IMAGE_FOLDER'])
-
-    # Set up segmentation mask directory path
-    original_seg_mask_folder = os.path.join(args.ARGS['SEG_MASK_FOLDER'], args.ARGS['ORIGINAL_MASK_FOLDER'])
-    cropped_seg_mask_folder = os.path.join(args.ARGS['SEG_MASK_FOLDER'], args.ARGS['CROPPED_MASK_FOLDER'])
-
     # Import the dataset list
-    dataset_list = read_file(args.ARGS['DATASET_LIST'])
+    dataset_list = read_file(ARGS['DATASET_LIST'])
 
     # Import the annotated Instance UIDs
-    instance_uids = read_file(args.ARGS['INSTANCE_UID_FILENAME'])
+    instance_uids = read_file(ARGS['INSTANCE_UID_FILENAME'])
 
     # If --unet was used, load U-Net model
     if parse_args.unet:
@@ -71,13 +53,13 @@ def main(parse_args):
             patient_id = file[file.rfind('/')+1:file.rfind('_')]
 
             # Check whether files already exist in all 4 sub-folders. If so, continue to next image
-            if not parse_args.overwrite:
+            if not parse_args.overwrite and not parse_args.just_annos:
                 count_8bit = 0
                 count_16bit = 0
-                for _, _, files in os.walk(folder_8bit):
+                for _, _, files in os.walk(ARGS['8_BIT_FOLDER']):
                     if patient_id + '.png' in files:
                         count_8bit += 1
-                for _, _, files in os.walk(folder_16bit):
+                for _, _, files in os.walk(ARGS['16_BIT_FOLDER']):
                     if patient_id + '.png' in files:
                         count_16bit += 1
 
@@ -93,10 +75,10 @@ def main(parse_args):
                 continue
 
             # Pull the corresponding annotation filename from annotation folder
-            annotation_filename = [fname for fname in os.listdir(args.ARGS['ANNOTATION_FOLDER']) if patient_id in fname]
+            annotation_filename = [fname for fname in os.listdir(ARGS['ANNOTATION_FOLDER']) if patient_id in fname]
 
             # Pull out annotation information
-            with open(os.path.join(args.ARGS['ANNOTATION_FOLDER'], annotation_filename[0])) as json_file:
+            with open(os.path.join(ARGS['ANNOTATION_FOLDER'], annotation_filename[0])) as json_file:
                 annotation_data = json.load(json_file)
 
             # Extract lists of bounding box points from annotation file
@@ -150,7 +132,7 @@ def main(parse_args):
             offset_br_ys = [val - y_offset for val in br_ys]
 
             for x1, y1, x2, y2 in zip(tl_xs, tl_ys, br_xs, br_ys):
-                info = [os.path.join(original_8bit_folder, patient_id + '.png'),
+                info = [os.path.join(ARGS['8_BIT_OG_IMAGE_FOLDER'], patient_id + '.png'),
                         original_image.shape[0],
                         original_image.shape[1],
                         x1,
@@ -160,7 +142,7 @@ def main(parse_args):
                 original_annotations.append(info)
 
             for x1, y1, x2, y2 in zip(offset_tl_xs, offset_tl_ys, offset_br_xs, offset_br_ys):
-                info = [os.path.join(cropped_equalized_8bit_folder, patient_id + '.png'),
+                info = [os.path.join(ARGS['8_BIT_CROP_HISTEQ_IMAGE_FOLDER'], patient_id + '.png'),
                         cropped_image.shape[0],
                         cropped_image.shape[1],
                         x1,
@@ -192,15 +174,15 @@ def main(parse_args):
             cropped_histeq_16bit_rgb = create_rgb(cropped_histeq_16bit)
 
             # Set the filenames for each image to save to
-            original_8bit_path = os.path.join(original_8bit_folder, patient_id + '.png')
-            original_histeq_8bit_path = os.path.join(original_equalized_8bit_folder, patient_id + '.png')
-            cropped_8bit_path = os.path.join(cropped_8bit_folder, patient_id + '.png')
-            cropped_histeq_8bit_path = os.path.join(cropped_equalized_8bit_folder, patient_id + '.png')
+            original_8bit_path = os.path.join(ARGS['8_BIT_OG_IMAGE_FOLDER'], patient_id + '.png')
+            original_histeq_8bit_path = os.path.join(ARGS['8_BIT_OG_HISTEQ_IMAGE_FOLDER'], patient_id + '.png')
+            cropped_8bit_path = os.path.join(ARGS['8_BIT_CROP_IMAGE_FOLDER'], patient_id + '.png')
+            cropped_histeq_8bit_path = os.path.join(ARGS['8_BIT_CROP_HISTEQ_IMAGE_FOLDER'], patient_id + '.png')
 
-            original_16bit_path = os.path.join(original_16bit_folder, patient_id + '.png')
-            original_histeq_16bit_path = os.path.join(original_equalized_16bit_folder, patient_id + '.png')
-            cropped_16bit_path = os.path.join(cropped_16bit_folder, patient_id + '.png')
-            cropped_histeq_16bit_path = os.path.join(cropped_equalized_16bit_folder, patient_id + '.png')
+            original_16bit_path = os.path.join(ARGS['16_BIT_OG_IMAGE_FOLDER'], patient_id + '.png')
+            original_histeq_16bit_path = os.path.join(ARGS['16_BIT_OG_HISTEQ_IMAGE_FOLDER'], patient_id + '.png')
+            cropped_16bit_path = os.path.join(ARGS['16_BIT_CROP_IMAGE_FOLDER'], patient_id + '.png')
+            cropped_histeq_16bit_path = os.path.join(ARGS['16_BIT_CROP_HISTEQ_IMAGE_FOLDER'], patient_id + '.png')
 
             # Save the images to their respective folders
             if not parse_args.just_annos:
@@ -215,8 +197,8 @@ def main(parse_args):
                 save_to_png(cropped_histeq_16bit_rgb, cropped_histeq_16bit_path, overwrite=parse_args.overwrite)
 
             # Set filename for cropped, processed segmentation mask
-            original_seg_mask_path = os.path.join(original_seg_mask_folder, patient_id + '.npy')
-            cropped_seg_mask_path = os.path.join(cropped_seg_mask_folder, patient_id + '.npy')
+            original_seg_mask_path = os.path.join(ARGS['ORIGINAL_MASK_FOLDER'], patient_id + '.npy')
+            cropped_seg_mask_path = os.path.join(ARGS['CROPPED_MASK_FOLDER'], patient_id + '.npy')
 
             # Save processed original size and cropped segmentation mask
             if unet_model is not None and not parse_args.just_annos:
@@ -237,7 +219,7 @@ def main(parse_args):
     # Export the list of offsets to a file
     # Rows are (IMG, X_OFFSET, Y_OFFSET)
     if not parse_args.break_loop:
-        with open(args.ARGS['OFFSET_FILENAME'], 'w') as out_file:
+        with open(ARGS['OFFSET_FILENAME'], 'w') as out_file:
             for line in offset_list:
                 out_str = line + '\n'
                 out_file.write(out_str)
@@ -248,8 +230,8 @@ def main(parse_args):
 
     # Save files only when loop isn't being broken (i.e., tested)
     if not parse_args.break_loop:
-        orig_annotations_df.to_csv(args.ARGS['ANNOTATION_OG_FILENAME'], index=False, header=False)
-        offset_annotations_df.to_csv(args.ARGS['ANNOTATION_OFFSET_FILENAME'], index=False, header=False)
+        orig_annotations_df.to_csv(ARGS['ANNOTATION_OG_FILENAME'], index=False, header=False)
+        offset_annotations_df.to_csv(ARGS['ANNOTATION_OFFSET_FILENAME'], index=False, header=False)
 
 
 if __name__ == "__main__":
