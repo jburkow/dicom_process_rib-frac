@@ -3,14 +3,13 @@ Filename: dicom_utils.py
 Authors: Jonathan Burkow, burkowjo@msu.edu
          Greg Holste, holstegr@msu.edu
          Michigan State University
-Last Updated: 09/06/2020
+Last Updated: 02/04/2021
 Description: A collection of utility functions needed to process through
     DICOM files, including thresholding, cropping, histogram
     equalization, and saving to PNGs.
 '''
 
 import os
-import csv
 import math
 import numpy as np
 import cv2
@@ -74,8 +73,6 @@ def invert_image(image):
     original image.
     """
     return np.invert(image) - np.invert(image).min()
-
-
 
 def threshold_image(image, method='li', verbose=False):
     """
@@ -539,7 +536,7 @@ def crop_dicom(image, pixel_spacing=None, verbose=False, crop_region='center', m
         # Pad pred array with zeros based on rough crop indices to match original image shape
         cat_y_pred = np.pad(cat_y_pred, [(init_crop[0], orig_image_shape[0] - init_crop[1]),
                                          (init_crop[2], orig_image_shape[1] - init_crop[3])])
-        
+
         # Convert to one-hot (H, W, n_classes)
         y_pred = to_one_hot(cat_y_pred)
 
