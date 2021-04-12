@@ -2,7 +2,7 @@
 Filename: dicom_crop_and_equalize.py
 Author: Jonathan Burkow, burkowjo@msu.edu
         Michigan State University
-Last Updated: 02/04/2021
+Last Updated: 04/12/2021
 Description: Loops through the list of DICOM files with image
     information and crops the image, and performs histogram
     equalization. Versions of the original, cropped, and equalized
@@ -13,12 +13,13 @@ import argparse
 import os
 import time
 import json
+import torch
 import pandas as pd
 from pydicom import dcmread
 from dicom_utils import (load_dicom_image, crop_dicom, hist_equalization, create_rgb,
                          scale_image_to_depth, save_to_png, save_to_npy, extract_bboxes)
 from args import ARGS
-from unet_utils import Unet
+from ChestSeg_PyTorch.models import UNet_3Plus_DeepSup
 from general_utils import read_file, print_iter
 
 def main(parse_args):
@@ -31,8 +32,9 @@ def main(parse_args):
 
     # If --unet was used, load U-Net model
     if parse_args.unet:
-        unet_model = Unet(img_height=256, img_width=256, n_classes=8, n_filters=32)
-        unet_model.load_weights(parse_args.model_weights)
+        device = torch.device('cuda:0' if torch.cuda.is_available else 'cpu')
+        unet_model = UNet_3Plus_DeepSup(in_channels=1, n_classes=5, n_filters=32).to(device)
+        unet_model.load_state_dict(torch.load('ChestSeg_PyTorch/logs/UNet3+_32f_256_bs24_bce+iou_deep-sup_aug_adam-0.0001/chkpt_epoch-256.pt')['weights'])
     else:
         unet_model = None
 

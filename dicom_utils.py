@@ -18,6 +18,9 @@ import numpngw
 from unet_utils import to_binary, to_one_hot, postprocess, get_unet_offsets
 from general_utils import plot_image
 
+# Globally define U-Net output classes
+CLASSES = ['background', 'spine', 'mediastinum', 'left_lung', 'right_lung', 'left_subdiaphragm', 'right_subdiaphragm']
+
 def load_dicom_image(dicom_file, verbose=False):
     """
     Load in the image array from the dicom file.
@@ -407,6 +410,33 @@ def get_center_crop_offsets(image, verbose=False):
 
     return offsets
 
+def get_unet_offsets(cat_mask):
+    """
+    Find offsets for predicted segmentation mask at rough crop dimensions.
+
+    Parameters
+    ----------
+    cat_mask : ndarray
+        categorical segmentation mask of shape (w, h)
+
+    Returns
+    -------
+    offsets : int, (top, bottom, left and right)
+        offsets for tighter cropping of rough-cropped image and mask
+    """
+    # Find indices where non-background pixels appear
+    fg_indices = np.nonzero(cat_mask)
+
+    # Find top, bottom, left, and right offsets from rough-cropped boundaries
+    top_offset = fg_indices[0].min()
+    bottom_offset = cat_mask.shape[0] - fg_indices[0].max() + 1
+    left_offset = fg_indices[1].min()
+    right_offset = cat_mask.shape[1] - fg_indices[1].max() + 1
+
+    offsets = (top_offset, bottom_offset, left_offset, right_offset)
+
+    return offsets
+
 def unet_crop(image, pixel_spacing, model, verbose=False):
     """
     Second stage option of cropping the DICOM image by using a trained
@@ -420,7 +450,7 @@ def unet_crop(image, pixel_spacing, model, verbose=False):
         array of the DICOM image after initial crop
     pixel_spacing : list [row_spacing, column_spacing]
         row and column spacing of image in physical units
-    model : Tensorflow-Keras model
+    model : PyTorch model
         U-Net architecture model to use segmentation instead
         of region crop for second stage of cropping
     verbose : bool
@@ -437,28 +467,19 @@ def unet_crop(image, pixel_spacing, model, verbose=False):
     image_copy = image.copy()
 
     # Resize and normalize to [0, 1] for U-Net
-    image_copy = cv2.resize(image_copy, (256, 256), interpolation=cv2.INTER_NEAREST)
+    image_copy = cv2.resize(image_copy, (256, 256))
     image_copy = (image_copy - np.min(image_copy)) / (np.max(image_copy) - np.min(image_copy))
 
-    # Predict segementation mask with U-Net and check if "failed"
-    y_pred = model.predict(image_copy[np.newaxis, ..., np.newaxis]).squeeze(axis=0)  # remove "batch" dimension
-    y_pred = to_binary(y_pred)  # threshold to one-hot
+    # Predict segementation mask with U-Net
+    y_hat = torch.stack([y_h for y_h in model.forward(image_copy)], dim=0).mean(dim=0)
+    
+    # Apply post-processing and threshold to binary (one-hot) predicted segmentation
+    proc_y_pred = postprocess(y_hat, CLASSES)
 
-    # Convert predicted segmentation to categorical (h, w)
-    cat_y_pred = np.argmax(y_pred, axis=-1)
+    # Convert to categorical and resize to original rough crop dimensions
+    cat_y_pred = cv2.resize(proc_y_pred.argmax(axis=1), (image.shape[1], image.shape[0]), interpolation=cv2.INTER_NEAREST)
 
-    # Process prediction (keep largest connected component)
-    # and check if U-Net has "failed"
-    cat_y_pred, unet_failed = postprocess(cat_y_pred, pixel_spacing)
-
-    # Resize prediction to rough crop dimensions to obtain proper offsets (OPENCV NEEDS (W, H) TUPLE FOR RESIZE)
-    cat_y_pred = cv2.resize(cat_y_pred, (image.shape[1], image.shape[0]), interpolation=cv2.INTER_NEAREST)
-
-    # Return nonsense offsets if U-Net segmentation "failed"
-    if unet_failed:
-        return cat_y_pred, (-1, -1, -1, -1)
-
-    # Find offsets based on processed, predicted mask
+    # Calculate offsets for final image cropping based on U-Net segmentation
     offsets = get_unet_offsets(cat_y_pred)
 
     # Print second stage crop offsets
