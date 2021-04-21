@@ -3,7 +3,7 @@ Filename: dicom_utils.py
 Authors: Jonathan Burkow, burkowjo@msu.edu
          Greg Holste, holstegr@msu.edu
          Michigan State University
-Last Updated: 02/04/2021
+Last Updated: 04/20/2021
 Description: A collection of utility functions needed to process through
     DICOM files, including thresholding, cropping, histogram
     equalization, and saving to PNGs.
@@ -13,9 +13,11 @@ import os
 import math
 import numpy as np
 import cv2
+import torch
 from skimage import exposure, color, filters
 import numpngw
-from unet_utils import to_binary, to_one_hot, postprocess, get_unet_offsets
+from ChestSeg_PyTorch.utils import postprocess
+from ChestSeg_PyTorch.preprocess import to_one_hot
 from general_utils import plot_image
 
 # Globally define U-Net output classes
@@ -437,7 +439,7 @@ def get_unet_offsets(cat_mask):
 
     return offsets
 
-def unet_crop(image, pixel_spacing, model, verbose=False):
+def unet_crop(image, pixel_spacing, model, device, verbose=False):
     """
     Second stage option of cropping the DICOM image by using a trained
     U-Net network to find an instance segmentation of the thoracic
@@ -468,16 +470,20 @@ def unet_crop(image, pixel_spacing, model, verbose=False):
 
     # Resize and normalize to [0, 1] for U-Net
     image_copy = cv2.resize(image_copy, (256, 256))
-    image_copy = (image_copy - np.min(image_copy)) / (np.max(image_copy) - np.min(image_copy))
+    image_copy = (image_copy - np.min(image_copy)) / (np.max(image_copy) - np.min(image_copy)) 
+
+    # Convert image to tensor
+    image_copy = torch.Tensor(image_copy).unsqueeze(0).unsqueeze(0).to(device)
 
     # Predict segementation mask with U-Net
     y_hat = torch.stack([y_h for y_h in model.forward(image_copy)], dim=0).mean(dim=0)
     
     # Apply post-processing and threshold to binary (one-hot) predicted segmentation
-    proc_y_pred = postprocess(y_hat, CLASSES)
+    proc_y_pred = postprocess(y_hat, CLASSES).squeeze()
 
     # Convert to categorical and resize to original rough crop dimensions
-    cat_y_pred = cv2.resize(proc_y_pred.argmax(axis=1), (image.shape[1], image.shape[0]), interpolation=cv2.INTER_NEAREST)
+    # cat_y_pred = cv2.resize(proc_y_pred.argmax(axis=1), (image.shape[1], image.shape[0]), interpolation=cv2.INTER_NEAREST)
+    cat_y_pred = cv2.resize(proc_y_pred.argmax(axis=0), (image.shape[1], image.shape[0]), interpolation=cv2.INTER_NEAREST)
 
     # Calculate offsets for final image cropping based on U-Net segmentation
     offsets = get_unet_offsets(cat_y_pred)
@@ -488,7 +494,7 @@ def unet_crop(image, pixel_spacing, model, verbose=False):
 
     return cat_y_pred, offsets
 
-def crop_dicom(image, pixel_spacing=None, verbose=False, crop_region='center', model=None):
+def crop_dicom(image, pixel_spacing=None, verbose=False, crop_region='center', model=None, device=None):
     """
     Full function to crop a DICOM image. The pixel array is cropped
     through two stages: the first does a rough crop to center on the
@@ -507,9 +513,10 @@ def crop_dicom(image, pixel_spacing=None, verbose=False, crop_region='center', m
     crop_region : str
         determine between quadrant or center regions to determine
         the second stage of cropping
-    model : TensorFlow model
+    model : PyTorch model
         U-Net architecture model to use instance segmentation instead
         of region crop for second stage of cropping
+    device : PyTorch device (cuda or cpu)
 
     Returns
     -------
@@ -530,14 +537,14 @@ def crop_dicom(image, pixel_spacing=None, verbose=False, crop_region='center', m
 
     # Get the index offsets from the region crop stage or U-Net segmentation
     if model is not None:
-        cat_y_pred, region_offsets = unet_crop(image_copy, pixel_spacing, model, verbose=verbose)
-
-        # If U-Net failed, revert to non-U-Net region crop
-        if region_offsets == (-1, -1, -1, -1):
-            if crop_region == 'quad':
-                region_offsets = get_quad_crop_offsets(image_copy, verbose=verbose)
-            elif crop_region == 'center':
-                region_offsets = get_center_crop_offsets(image_copy, verbose=verbose)
+        cat_y_pred, region_offsets = unet_crop(image_copy, pixel_spacing, model, device, verbose=verbose)
+        print('shape of cat_y_pred', cat_y_pred.shape)
+        # # If U-Net failed, revert to non-U-Net region crop
+        # if region_offsets == (-1, -1, -1, -1):
+        #     if crop_region == 'quad':
+        #         region_offsets = get_quad_crop_offsets(image_copy, verbose=verbose)
+        #     elif crop_region == 'center':
+        #         region_offsets = get_center_crop_offsets(image_copy, verbose=verbose)
     else:
         if crop_region == 'quad':
             region_offsets = get_quad_crop_offsets(image_copy, verbose=verbose)
