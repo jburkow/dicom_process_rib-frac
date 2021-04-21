@@ -2,7 +2,7 @@
 Filename: dicom_crop_and_equalize.py
 Author: Jonathan Burkow, burkowjo@msu.edu
         Michigan State University
-Last Updated: 04/12/2021
+Last Updated: 04/21/2021
 Description: Loops through the list of DICOM files with image
     information and crops the image, and performs histogram
     equalization. Versions of the original, cropped, and equalized
@@ -13,13 +13,14 @@ import argparse
 import os
 import time
 import json
+import traceback
 import torch
 import pandas as pd
 from pydicom import dcmread
 from dicom_utils import (load_dicom_image, crop_dicom, hist_equalization, create_rgb,
                          scale_image_to_depth, save_to_png, save_to_npy, extract_bboxes)
 from args import ARGS
-from ChestSeg_PyTorch.models import UNet_3Plus_DeepSup
+from ChestSeg_PyTorch.models.UNet_3Plus import UNet_3Plus_DeepSup
 from general_utils import read_file, print_iter
 
 def main(parse_args):
@@ -33,8 +34,8 @@ def main(parse_args):
     # If --unet was used, load U-Net model
     if parse_args.unet:
         device = torch.device('cuda:0' if torch.cuda.is_available else 'cpu')
-        unet_model = UNet_3Plus_DeepSup(in_channels=1, n_classes=5, n_filters=32).to(device)
-        unet_model.load_state_dict(torch.load('ChestSeg_PyTorch/logs/UNet3+_32f_256_bs24_bce+iou_deep-sup_aug_adam-0.0001/chkpt_epoch-256.pt')['weights'])
+        unet_model = UNet_3Plus_DeepSup(in_channels=1, n_classes=7, n_filters=32).to(device)
+        unet_model.load_state_dict(torch.load(parse_args.model_weights)['weights'])
     else:
         unet_model = None
 
@@ -72,31 +73,36 @@ def main(parse_args):
             dcm = dcmread(file)
 
             # Check if InstanceUID is in the list of annotated instances.
-            # If not, continue to next dicom file.
-            if dcm.SOPInstanceUID not in instance_uids:
-                continue
+            # If yes, get corresponding annotation info
+            if dcm.SOPInstanceUID in instance_uids:
+                # Pull the corresponding annotation filename from annotation folder
+                annotation_filename = [fname for fname in os.listdir(ARGS['ANNOTATION_FOLDER']) if patient_id in fname]
 
-            # Pull the corresponding annotation filename from annotation folder
-            annotation_filename = [fname for fname in os.listdir(ARGS['ANNOTATION_FOLDER']) if patient_id in fname]
+                # Pull out annotation information
+                with open(os.path.join(ARGS['ANNOTATION_FOLDER'], annotation_filename[0])) as json_file:
+                    annotation_data = json.load(json_file)
 
-            # Pull out annotation information
-            with open(os.path.join(ARGS['ANNOTATION_FOLDER'], annotation_filename[0])) as json_file:
-                annotation_data = json.load(json_file)
-
-            # Extract lists of bounding box points from annotation file
-            tl_xs, tl_ys, br_xs, br_ys = extract_bboxes(annotation_data)
+                # Extract lists of bounding box points from annotation file
+                tl_xs, tl_ys, br_xs, br_ys = extract_bboxes(annotation_data)
 
             # Pull out ImagerPixelSpacing if it is available
             PIXEL_SPACING = dcm.ImagerPixelSpacing if hasattr(dcm, "ImagerPixelSpacing") else None
 
             # Load in original image and get indices to crop
             original_image = load_dicom_image(dcm)
+            stst = time.perf_counter()
             if unet_model is not None:
-                pred_mask, offsets = crop_dicom(original_image, pixel_spacing=PIXEL_SPACING, model=unet_model)
+                pred_mask, offsets = crop_dicom(original_image, pixel_spacing=PIXEL_SPACING, model=unet_model, device=device)
             else:
                 offsets = crop_dicom(original_image, model=unet_model)
 
             # Compare crop indices to bounding boxes
+            # If not in InstanceUIDs, keep crop indices the same
+            if dcm.SOPInstanceUID not in instance_uids:
+                minmax_indices = (min(offsets[0]),
+                                  max(offsets[1]),
+                                  min(offsets[2]),
+                                  max(offsets[3]))
             # If bounding boxes are outside of crop indices, use bounding box indices to crop
             minmax_indices = (min(offsets[0], min(tl_ys)),
                               max(offsets[1], max(br_ys)),
@@ -127,31 +133,32 @@ def main(parse_args):
             y_offset = final_indices[0]
             offset_list.append(','.join([patient_id, str(x_offset), str(y_offset)]))
 
-            # Create new lists for bounding boxes integrating the offsets
-            offset_tl_xs = [val - x_offset for val in tl_xs]
-            offset_tl_ys = [val - y_offset for val in tl_ys]
-            offset_br_xs = [val - x_offset for val in br_xs]
-            offset_br_ys = [val - y_offset for val in br_ys]
+            if dcm.SOPInstanceUID in instance_uids:
+                # Create new lists for bounding boxes integrating the offsets
+                offset_tl_xs = [val - x_offset for val in tl_xs]
+                offset_tl_ys = [val - y_offset for val in tl_ys]
+                offset_br_xs = [val - x_offset for val in br_xs]
+                offset_br_ys = [val - y_offset for val in br_ys]
 
-            for x1, y1, x2, y2 in zip(tl_xs, tl_ys, br_xs, br_ys):
-                info = [os.path.join(ARGS['8_BIT_OG_IMAGE_FOLDER'], patient_id + '.png'),
-                        original_image.shape[0],
-                        original_image.shape[1],
-                        x1,
-                        y1,
-                        x2,
-                        y2]
-                original_annotations.append(info)
+                for x1, y1, x2, y2 in zip(tl_xs, tl_ys, br_xs, br_ys):
+                    info = [os.path.join(ARGS['8_BIT_OG_IMAGE_FOLDER'], patient_id + '.png'),
+                            original_image.shape[0],
+                            original_image.shape[1],
+                            x1,
+                            y1,
+                            x2,
+                            y2]
+                    original_annotations.append(info)
 
-            for x1, y1, x2, y2 in zip(offset_tl_xs, offset_tl_ys, offset_br_xs, offset_br_ys):
-                info = [os.path.join(ARGS['8_BIT_CROP_HISTEQ_IMAGE_FOLDER'], patient_id + '.png'),
-                        cropped_image.shape[0],
-                        cropped_image.shape[1],
-                        x1,
-                        y1,
-                        x2,
-                        y2]
-                offset_annotations.append(info)
+                for x1, y1, x2, y2 in zip(offset_tl_xs, offset_tl_ys, offset_br_xs, offset_br_ys):
+                    info = [os.path.join(ARGS['8_BIT_CROP_HISTEQ_IMAGE_FOLDER'], patient_id + '.png'),
+                            cropped_image.shape[0],
+                            cropped_image.shape[1],
+                            x1,
+                            y1,
+                            x2,
+                            y2]
+                    offset_annotations.append(info)
 
             # Create 8 bit versions of images
             original_8bit = scale_image_to_depth(original_image, 8)
@@ -210,13 +217,15 @@ def main(parse_args):
         except Exception as e:
             print('') # End print stream from loop
             print(e)
+            print(traceback.format_exc())
             failed_list.append(patient_id)
     print('') # End print stream from loop
 
     # Print out failed-to-process images:
     if len(failed_list) > 0:
         print("Failed on", len(failed_list), "images:")
-        [print(img) for img in failed_list]
+        for img in failed_list: print(img)
+        # [print(img) for img in failed_list]
 
     # Export the list of offsets to a file
     # Rows are (IMG, X_OFFSET, Y_OFFSET)
@@ -245,7 +254,7 @@ if __name__ == "__main__":
     parser.add_argument('--overwrite', action='store_true',
                         help='Overwrite existing images.')
 
-    parser.add_argument('--model_weights', default='aug_unet_256_32f_cce_071019_weights.h5',
+    parser.add_argument('--model_weights', default='ChestSeg_PyTorch/logs/UNet3+_32f_256_bs24_bce+iou_deep-sup_aug_adam-0.0001/chkpt_epoch-256.pt',
                         help='Filename/path to the model weights to load into U-Net.')
 
     parser.add_argument('--mm_spacing', type=int, default=5,
