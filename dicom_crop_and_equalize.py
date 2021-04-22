@@ -2,13 +2,14 @@
 Filename: dicom_crop_and_equalize.py
 Author: Jonathan Burkow, burkowjo@msu.edu
         Michigan State University
-Last Updated: 04/21/2021
+Last Updated: 04/22/2021
 Description: Loops through the list of DICOM files with image
     information and crops the image, and performs histogram
     equalization. Versions of the original, cropped, and equalized
     images in both 8-bit depth and 16-bit depth are saved. CSV files
     with the original and cropped annotation information are also saved.
 '''
+
 import argparse
 import os
 import time
@@ -90,7 +91,7 @@ def main(parse_args):
 
             # Load in original image and get indices to crop
             original_image = load_dicom_image(dcm)
-            stst = time.perf_counter()
+
             if unet_model is not None:
                 pred_mask, offsets = crop_dicom(original_image, pixel_spacing=PIXEL_SPACING, model=unet_model, device=device)
             else:
@@ -140,6 +141,7 @@ def main(parse_args):
                 offset_br_xs = [val - x_offset for val in br_xs]
                 offset_br_ys = [val - y_offset for val in br_ys]
 
+                # Append annotations based on the original image
                 for x1, y1, x2, y2 in zip(tl_xs, tl_ys, br_xs, br_ys):
                     info = [os.path.join(ARGS['8_BIT_OG_IMAGE_FOLDER'], patient_id + '.png'),
                             original_image.shape[0],
@@ -150,6 +152,7 @@ def main(parse_args):
                             y2]
                     original_annotations.append(info)
 
+                # Append annotations based on the cropped image
                 for x1, y1, x2, y2 in zip(offset_tl_xs, offset_tl_ys, offset_br_xs, offset_br_ys):
                     info = [os.path.join(ARGS['8_BIT_CROP_HISTEQ_IMAGE_FOLDER'], patient_id + '.png'),
                             cropped_image.shape[0],
@@ -159,6 +162,18 @@ def main(parse_args):
                             x2,
                             y2]
                     offset_annotations.append(info)
+            else: # Append images without annotations
+                info = [os.path.join(ARGS['8_BIT_OG_IMAGE_FOLDER'], patient_id + '.png'),
+                        original_image.shape[0],
+                        original_image.shape[1],
+                        "", "", "", ""]
+                original_annotations.append(info)
+                
+                info = [os.path.join(ARGS['8_BIT_CROP_HISTEQ_IMAGE_FOLDER'], patient_id + '.png'),
+                        cropped_image.shape[0],
+                        cropped_image.shape[1],
+                        "", "", "", ""]
+                offset_annotations.append(info)
 
             # Create 8 bit versions of images
             original_8bit = scale_image_to_depth(original_image, 8)
@@ -216,16 +231,15 @@ def main(parse_args):
 
         except Exception as e:
             print('') # End print stream from loop
-            print(e)
             print(traceback.format_exc())
             failed_list.append(patient_id)
     print('') # End print stream from loop
 
     # Print out failed-to-process images:
     if len(failed_list) > 0:
-        print("Failed on", len(failed_list), "images:")
-        for img in failed_list: print(img)
-        # [print(img) for img in failed_list]
+        print(f"Failed on {len(failed_list)} images:")
+        for img in failed_list:
+            print(img)
 
     # Export the list of offsets to a file
     # Rows are (IMG, X_OFFSET, Y_OFFSET)
