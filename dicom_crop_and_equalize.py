@@ -268,7 +268,7 @@ if __name__ == "__main__":
     parser.add_argument('--overwrite', action='store_true',
                         help='Overwrite existing images.')
 
-    parser.add_argument('--model_weights', default='ChestSeg_PyTorch/logs/UNet3+_32f_256_bs24_bce+iou_deep-sup_aug_adam-0.0001/chkpt_epoch-256.pt',
+    parser.add_argument('--model_weights', default='/mnt/home/burkowjo/Documents/rib_fracture_utils/ChestSeg_PyTorch/logs/UNet3+_32f_256_bs24_bce+iou_deep-sup_aug_adam-0.0001/chkpt_epoch-256.pt',
                         help='Filename/path to the model weights to load into U-Net.')
 
     parser.add_argument('--mm_spacing', type=int, default=5,
