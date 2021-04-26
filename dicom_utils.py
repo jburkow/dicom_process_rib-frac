@@ -538,7 +538,7 @@ def crop_dicom(image, pixel_spacing=None, verbose=False, crop_region='center', m
     # Get the index offsets from the region crop stage or U-Net segmentation
     if model is not None:
         cat_y_pred, region_offsets = unet_crop(image_copy, pixel_spacing, model, device, verbose=verbose)
-        print('shape of cat_y_pred', cat_y_pred.shape)
+
         # # If U-Net failed, revert to non-U-Net region crop
         # if region_offsets == (-1, -1, -1, -1):
         #     if crop_region == 'quad':
