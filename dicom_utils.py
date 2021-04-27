@@ -1,9 +1,11 @@
 '''
 Filename: dicom_utils.py
 Authors: Jonathan Burkow, burkowjo@msu.edu
+         Michigan State University
+
          Greg Holste, holstegr@msu.edu
          Michigan State University
-Last Updated: 04/20/2021
+Last Updated: 04/27/2021
 Description: A collection of utility functions needed to process through
     DICOM files, including thresholding, cropping, histogram
     equalization, and saving to PNGs.
@@ -22,6 +24,7 @@ from general_utils import plot_image
 
 # Globally define U-Net output classes
 CLASSES = ['background', 'spine', 'mediastinum', 'left_lung', 'right_lung', 'left_subdiaphragm', 'right_subdiaphragm']
+
 
 def load_dicom_image(dicom_file, verbose=False):
     """
@@ -62,9 +65,11 @@ def load_dicom_image(dicom_file, verbose=False):
     image = slope * image + intercept
 
     # Plot the image from the dicom file
-    if verbose: plot_image(image, title='Original Image')
+    if verbose:
+        plot_image(image, title='Original Image')
 
     return image.astype(float)
+
 
 def invert_image(image):
     """
@@ -78,6 +83,7 @@ def invert_image(image):
     original image.
     """
     return np.invert(image) - np.invert(image).min()
+
 
 def threshold_image(image, method='li', verbose=False):
     """
@@ -111,9 +117,11 @@ def threshold_image(image, method='li', verbose=False):
     image[image < threshold] = 0
 
     # Plot the current stage of the image
-    if verbose: plot_image(image, title='Thresholded Image')
+    if verbose:
+        plot_image(image, title='Thresholded Image')
 
     return image
+
 
 def rough_crop(image, blank_dist=20, verbose=False):
     """
@@ -154,8 +162,8 @@ def rough_crop(image, blank_dist=20, verbose=False):
             break
         if col_nonzero[i+1] - col_nonzero[i] > blank_dist:
             left_bound = col_nonzero[i+1]
-    # Set left bound too min nonzero index if no black space exists
-    if left_bound < 0: left_bound = col_nonzero.min()
+    # Set left bound to min nonzero index if no black space exists
+    left_bound = col_nonzero.min() if left_bound < 0 else left_bound
 
     # Compute right bound based on black space between indices
     for i in range(len(col_nonzero)-1, 0, -1):
@@ -163,8 +171,8 @@ def rough_crop(image, blank_dist=20, verbose=False):
             break
         if col_nonzero[i] - col_nonzero[i-1] > blank_dist:
             right_bound = col_nonzero[i-1]
-    # Set right bound too min nonzero index if no black space exists
-    if right_bound < 0: right_bound = col_nonzero.max()
+    # Set right bound to min nonzero index if no black space exists
+    right_bound = col_nonzero.max() if right_bound < 0 else right_bound
 
     # Compute top bound based on black space between indices
     for i in range(0, len(row_nonzero) - 1):
@@ -172,8 +180,8 @@ def rough_crop(image, blank_dist=20, verbose=False):
             break
         if row_nonzero[i+1] - row_nonzero[i] > blank_dist:
             top_bound = row_nonzero[i+1]
-    # Set top bound too min nonzero index if no black space exists
-    if top_bound < 0: top_bound = row_nonzero.min()
+    # Set top bound to min nonzero index if no black space exists
+    top_bound = row_nonzero.min() if top_bound < 0 else top_bound
 
     # Compute bottom bound based on black space between indices
     for i in range(len(row_nonzero)-1, 0, -1):
@@ -181,8 +189,8 @@ def rough_crop(image, blank_dist=20, verbose=False):
             break
         if row_nonzero[i] - row_nonzero[i-1] > blank_dist:
             bottom_bound = row_nonzero[i-1]
-    # Set bottom bound too min nonzero index if no black space exists
-    if bottom_bound < 0: bottom_bound = row_nonzero.max()
+    # Set bottom bound to min nonzero index if no black space exists
+    bottom_bound = row_nonzero.max() if bottom_bound < 0 else bottom_bound
 
     # Store the rough crop indices
     top = int(top_bound)
@@ -201,6 +209,7 @@ def rough_crop(image, blank_dist=20, verbose=False):
         plot_image(image, title='Initial Crop')
 
     return image, indices
+
 
 def quadrant_indices(quadrant_array, quad_height, quad_width, quadrant, sum_threshold=0.10):
     """
@@ -265,7 +274,7 @@ def quadrant_indices(quadrant_array, quad_height, quad_width, quadrant, sum_thre
         try:
             bottom_bound = row_binary.nonzero()[0].max()
         except:
-            bottom_bound= quad_height
+            bottom_bound = quad_height
 
         return int(left_bound), int(bottom_bound)
     elif quadrant == 'bottomright':
@@ -291,6 +300,7 @@ def quadrant_indices(quadrant_array, quad_height, quad_width, quadrant, sum_thre
             return int(right_bound)
         except:
             return quad_width
+
 
 def get_quad_crop_offsets(image, verbose=False):
     """
@@ -349,6 +359,7 @@ def get_quad_crop_offsets(image, verbose=False):
         print('Quadrant crop offsets:', offsets)
 
     return offsets
+
 
 def get_center_crop_offsets(image, verbose=False):
     """
@@ -412,6 +423,7 @@ def get_center_crop_offsets(image, verbose=False):
 
     return offsets
 
+
 def get_unet_offsets(cat_mask):
     """
     Find offsets for predicted segmentation mask at rough crop dimensions.
@@ -438,6 +450,7 @@ def get_unet_offsets(cat_mask):
     offsets = (top_offset, bottom_offset, left_offset, right_offset)
 
     return offsets
+
 
 def unet_crop(image, pixel_spacing, model, device, verbose=False):
     """
@@ -477,7 +490,7 @@ def unet_crop(image, pixel_spacing, model, device, verbose=False):
 
     # Predict segementation mask with U-Net
     y_hat = torch.stack([y_h for y_h in model.forward(image_copy)], dim=0).mean(dim=0)
-    
+
     # Apply post-processing and threshold to binary (one-hot) predicted segmentation
     proc_y_pred = postprocess(y_hat, CLASSES).squeeze()
 
@@ -493,6 +506,7 @@ def unet_crop(image, pixel_spacing, model, device, verbose=False):
         print('U-Net segmentation crop offsets:', offsets)
 
     return cat_y_pred, offsets
+
 
 def crop_dicom(image, pixel_spacing=None, verbose=False, crop_region='center', model=None, device=None):
     """
@@ -558,7 +572,8 @@ def crop_dicom(image, pixel_spacing=None, verbose=False, crop_region='center', m
                min(image.shape[1], init_crop[3] - region_offsets[3]))
 
     # Plot the final cropped image
-    if verbose: plot_image(image, title='Final Cropped Image')
+    if verbose:
+        plot_image(image, title='Final Cropped Image')
 
     if model is not None:
         # Pad pred array with zeros based on rough crop indices to match original image shape
@@ -572,6 +587,7 @@ def crop_dicom(image, pixel_spacing=None, verbose=False, crop_region='center', m
     else:
         return indices
 
+
 def save_to_npy(y_pred, save_loc):
     """
     Save NumPy array to a .npy file.
@@ -584,6 +600,7 @@ def save_to_npy(y_pred, save_loc):
         filepath of destination of image_array
     """
     np.save(save_loc, y_pred)
+
 
 def create_rgb(image):
     """
@@ -604,6 +621,7 @@ def create_rgb(image):
 
     return image
 
+
 def save_to_png(image_array, save_loc, overwrite=False):
     """
     Save the image array to a RGB PNG file.
@@ -622,6 +640,7 @@ def save_to_png(image_array, save_loc, overwrite=False):
     else:
         if not os.path.exists(save_loc):
             numpngw.write_png(save_loc, image_array)
+
 
 def scale_image_to_depth(image, bit_depth):
     """
@@ -647,6 +666,7 @@ def scale_image_to_depth(image, bit_depth):
 
     if bit_depth == 16:
         return image.astype('uint16')
+
 
 def hist_equalization(image, method='hand', bit_depth=16, verbose=False):
     """
@@ -684,7 +704,7 @@ def hist_equalization(image, method='hand', bit_depth=16, verbose=False):
 
     elif method == 'hand':
         # Set the number of intensity values for the image image
-        L = 2**bit_depth # 65536 for 16, 256 for 8
+        L = 2**bit_depth  # 65536 for 16, 256 for 8
 
         if L < image.max():
             image /= image.max()
@@ -704,9 +724,11 @@ def hist_equalization(image, method='hand', bit_depth=16, verbose=False):
         hist_eq_img = hist_eq_img.reshape(image.shape)
 
     # Plot the histogram equalized image
-    if verbose: plot_image(hist_eq_img, title='Histogram Equalized Image')
+    if verbose:
+        plot_image(hist_eq_img, title='Histogram Equalized Image')
 
     return hist_eq_img
+
 
 def extract_bboxes(annotation_data):
     """
@@ -733,7 +755,8 @@ def extract_bboxes(annotation_data):
     tl_ys = []
     br_xs = []
     br_ys = []
-    for pt in zip(annotation_data['rectangles']['start_points'], annotation_data['rectangles']['end_points']):
+    for pt in zip(annotation_data['rectangles']['start_points'],
+                  annotation_data['rectangles']['end_points']):
         x1 = math.floor(pt[0][0])
         y1 = math.floor(pt[0][1])
         x2 = math.ceil(pt[1][0])
