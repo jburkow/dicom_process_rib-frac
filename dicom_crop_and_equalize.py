@@ -208,7 +208,7 @@ def main(parse_args):
             cropped_histeq_16bit_path = os.path.join(ARGS['16_BIT_CROP_HISTEQ_IMAGE_FOLDER'], patient_id + '.png')
 
             # Save the images to their respective folders
-            if not parse_args.just_annos:
+            if not parse_args.just_annos or not parse_args.no_save:
                 save_to_png(original_8bit_rgb, original_8bit_path, overwrite=parse_args.overwrite)
                 save_to_png(original_histeq_8bit_rgb, original_histeq_8bit_path, overwrite=parse_args.overwrite)
                 save_to_png(cropped_8bit_rgb, cropped_8bit_path, overwrite=parse_args.overwrite)
@@ -242,7 +242,7 @@ def main(parse_args):
 
     # Export the list of offsets to a file
     # Rows are (IMG, X_OFFSET, Y_OFFSET)
-    if not parse_args.break_loop:
+    if not parse_args.break_loop or not parse_args.no_save:
         with open(ARGS['OFFSET_FILENAME'], 'w') as out_file:
             for line in offset_list:
                 out_str = line + '\n'
@@ -253,7 +253,7 @@ def main(parse_args):
     offset_annotations_df = pd.DataFrame(offset_annotations, columns=(['ID', 'height', 'width', 'x1', 'y1', 'x2', 'y2']))
 
     # Save files only when loop isn't being broken (i.e., tested)
-    if not parse_args.break_loop:
+    if not parse_args.break_loop or not parse_args.no_save:
         orig_annotations_df.to_csv(ARGS['ANNOTATION_OG_FILENAME'], index=False, header=False)
         offset_annotations_df.to_csv(ARGS['ANNOTATION_OFFSET_FILENAME'], index=False, header=False)
 
@@ -281,6 +281,9 @@ if __name__ == "__main__":
 
     parser.add_argument('--just_annos', action='store_true',
                         help='Use if you just need to get annotation and offset files remade.')
+
+    parser.add_argument('--no_save', action='store_true',
+                        help='Use in order to not save any files (useful for debugging).')
 
     parser_args = parser.parse_args()
 
