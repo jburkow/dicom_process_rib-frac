@@ -94,7 +94,7 @@ def main(parse_args):
             original_image = load_dicom_image(dcm)
 
             if unet_model is not None:
-                pred_mask, offsets = crop_dicom(original_image, pixel_spacing=PIXEL_SPACING, model=unet_model, device=device)
+                pred_mask, offsets = crop_dicom(original_image, model=unet_model, device=device)
             else:
                 offsets = crop_dicom(original_image, model=unet_model)
 
