@@ -452,7 +452,7 @@ def get_unet_offsets(cat_mask):
     return offsets
 
 
-def unet_crop(image, pixel_spacing, model, device, verbose=False):
+def unet_crop(image, model, device, verbose=False):
     """
     Second stage option of cropping the DICOM image by using a trained
     U-Net network to find an instance segmentation of the thoracic
@@ -463,8 +463,6 @@ def unet_crop(image, pixel_spacing, model, device, verbose=False):
     ----------
     image : ndarray
         array of the DICOM image after initial crop
-    pixel_spacing : list [row_spacing, column_spacing]
-        row and column spacing of image in physical units
     model : PyTorch model
         U-Net architecture model to use segmentation instead
         of region crop for second stage of cropping
@@ -508,7 +506,7 @@ def unet_crop(image, pixel_spacing, model, device, verbose=False):
     return cat_y_pred, offsets
 
 
-def crop_dicom(image, pixel_spacing=None, verbose=False, crop_region='center', model=None, device=None):
+def crop_dicom(image, verbose=False, crop_region='center', model=None, device=None):
     """
     Full function to crop a DICOM image. The pixel array is cropped
     through two stages: the first does a rough crop to center on the
@@ -520,8 +518,6 @@ def crop_dicom(image, pixel_spacing=None, verbose=False, crop_region='center', m
     ----------
     image : ndarray
         array of the original DICOM image
-    pixel_spacing : float
-        the physical spacing between pixels from the imaging device
     verbose : bool
         If True, print out each stage of image processing steps
     crop_region : str
@@ -551,7 +547,7 @@ def crop_dicom(image, pixel_spacing=None, verbose=False, crop_region='center', m
 
     # Get the index offsets from the region crop stage or U-Net segmentation
     if model is not None:
-        cat_y_pred, region_offsets = unet_crop(image_copy, pixel_spacing, model, device, verbose=verbose)
+        cat_y_pred, region_offsets = unet_crop(image_copy, model, device, verbose=verbose)
 
         # # If U-Net failed, revert to non-U-Net region crop
         # if region_offsets == (-1, -1, -1, -1):
