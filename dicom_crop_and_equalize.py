@@ -224,7 +224,7 @@ def main(parse_args):
             cropped_seg_mask_path = os.path.join(ARGS['CROPPED_MASK_FOLDER'], patient_id + '.npy')
 
             # Save processed original size and cropped segmentation mask
-            if unet_model is not None and not parse_args.just_annos:
+            if unet_model is not None and not parse_args.just_annos and not parse_args.no_save:
                 save_to_npy(pred_mask, original_seg_mask_path)
                 save_to_npy(cropped_pred_mask, cropped_seg_mask_path)
 
