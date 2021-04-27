@@ -2,7 +2,7 @@
 Filename: dicom_crop_and_equalize.py
 Author: Jonathan Burkow, burkowjo@msu.edu
         Michigan State University
-Last Updated: 04/22/2021
+Last Updated: 04/27/2021
 Description: Loops through the list of DICOM files with image
     information and crops the image, and performs histogram
     equalization. Versions of the original, cropped, and equalized
@@ -23,6 +23,7 @@ from dicom_utils import (load_dicom_image, crop_dicom, hist_equalization, create
 from args import ARGS
 from ChestSeg_PyTorch.models.UNet_3Plus import UNet_3Plus_DeepSup
 from general_utils import read_file, print_iter
+
 
 def main(parse_args):
     """Main Function"""
@@ -100,15 +101,13 @@ def main(parse_args):
             # Compare crop indices to bounding boxes
             # If not in InstanceUIDs, keep crop indices the same
             if dcm.SOPInstanceUID not in instance_uids:
-                minmax_indices = (min(offsets[0]),
-                                  max(offsets[1]),
-                                  min(offsets[2]),
-                                  max(offsets[3]))
+                minmax_indices = offsets
             # If bounding boxes are outside of crop indices, use bounding box indices to crop
-            minmax_indices = (min(offsets[0], min(tl_ys)),
-                              max(offsets[1], max(br_ys)),
-                              min(offsets[2], min(tl_xs)),
-                              max(offsets[3], max(br_xs)))
+            else:
+                minmax_indices = (min(offsets[0], min(tl_ys)),
+                                  max(offsets[1], max(br_ys)),
+                                  min(offsets[2], min(tl_xs)),
+                                  max(offsets[3], max(br_xs)))
 
             # Use ImagerPixelSpacing if available to add buffer to all sides
             if PIXEL_SPACING is not None:
@@ -162,13 +161,13 @@ def main(parse_args):
                             x2,
                             y2]
                     offset_annotations.append(info)
-            else: # Append images without annotations
+            else:  # Append images without annotations
                 info = [os.path.join(ARGS['8_BIT_OG_IMAGE_FOLDER'], patient_id + '.png'),
                         original_image.shape[0],
                         original_image.shape[1],
                         "", "", "", ""]
                 original_annotations.append(info)
-                
+
                 info = [os.path.join(ARGS['8_BIT_CROP_HISTEQ_IMAGE_FOLDER'], patient_id + '.png'),
                         cropped_image.shape[0],
                         cropped_image.shape[1],
@@ -230,10 +229,10 @@ def main(parse_args):
                 save_to_npy(cropped_pred_mask, cropped_seg_mask_path)
 
         except Exception as e:
-            print('') # End print stream from loop
+            print('')  # End print stream from loop
             print(traceback.format_exc())
             failed_list.append(patient_id)
-    print('') # End print stream from loop
+    print('')  # End print stream from loop
 
     # Print out failed-to-process images:
     if len(failed_list) > 0:
