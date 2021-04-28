@@ -35,7 +35,7 @@ def main(parse_args):
 
     # If --unet was used, load U-Net model
     if parse_args.unet:
-        device = torch.device('cuda:0' if torch.cuda.is_available else 'cpu')
+        device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
         unet_model = UNet_3Plus_DeepSup(in_channels=1, n_classes=7, n_filters=32).to(device)
         unet_model.load_state_dict(torch.load(parse_args.model_weights)['weights'])
     else:
