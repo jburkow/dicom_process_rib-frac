@@ -2,7 +2,7 @@
 Filename: dicom_stats.py
 Author: Jonathan Burkow, burkowjo@msu.edu
         Michigan State University
-Last Updated: 05/07/2021
+Last Updated: 05/10/2021
 Description: Loops through all available DICOM files to extract gender,
     age, and other potentially relevant information.
 '''
@@ -10,194 +10,188 @@ Description: Loops through all available DICOM files to extract gender,
 import argparse
 import os
 import time
-from pydicom import dcmread
-from args import ARGS
-from general_utils import print_iter
+
+from tqdm import tqdm
 import numpy as np
+import pandas as pd
+from pydicom import dcmread
+
+from args import ARGS
 
 
 def age_to_days(age_val):
-    age_code = age_val[-1]
-    tmp_age = 0
+    """
+    Convert the DICOM-coded age value into a numerical age in days.
 
-    if age_code == 'D':
-        tmp_age = int(age_val[:-1])
-    elif age_code == 'W':
-        tmp_age = int(age_val[:-1]) * 7
-    elif age_code == 'M':
-        tmp_age = int(age_val[:-1]) * 7 * 4
-    elif age_code == 'Y':
-        tmp_age = int(age_val[:-1]) * 365
+    Parameters
+    ----------
+    age_val : str
+        DICOM-coded age representation
+    """
+
+    if age_val == '':
+        return pd.NA
+    if age_val[-1] == 'D':
+        return int(age_val[:-1])
+    if age_val[-1] == 'W':
+        return int(age_val[:-1]) * 7
+    if age_val[-1] == 'M':
+        return int(age_val[:-1]) * 7 * 4
+    if age_val[-1] == 'Y':
+        return int(age_val[:-1]) * 365
+
+
+def simple_manufacturer(manufacturer):
+    """
+    Simplify the manufacturer name from the DICOM file.
+
+    Parameters
+    ----------
+    manufacturer : str
+        Manufacturer of the X-Ray machine used in the study
+    """
+    if 'philips' in manufacturer.lower():
+        return 'Philips'
+    if 'canon' in manufacturer.lower():
+        return 'Canon'
+    if 'fuji' in manufacturer.lower():
+        return 'Fuji'
+    if 'kodak' in manufacturer.lower():
+        return 'Kodak'
+    if 'ge' in manufacturer.lower():
+        return 'GE'
+    # If none of the previous conditions are met, return "Other"
+    return 'Other'
+
+def print_summary(dicom_df, dataset=None):
+    """
+    Print out summary of metadata from the saved CSV file.
+
+    Parameters
+    ----------
+    dicom_df : DataFrame
+        DataFrame from the loaded in CSV file
+    dataset : str
+        String to determine whether to print just fracture present or
+        fracture absent sections of the data
+    """
+    if dataset is not None:
+        header_str = f'FRACTURE {dataset} SUMMARY'.upper()
+        curr_df = dicom_df[dicom_df['has_fractures'] == dataset]
     else:
-        raise ValueError("Wtf age code is that?", age_code)
+        header_str = 'FRACTURE DATASET SUMMARY'
+        curr_df = dicom_df
 
-    return tmp_age
+    print(f"{header_str:^50}")
+    print('-'*50)
+    print('Total Unique Patients\t', len(curr_df))
+    print('-'*50)
+    print(f'{"AGE SUMMARY":^50}')
+    print(f'{f"({curr_df.age_days.dropna().shape[0]}/{len(curr_df.age_days)}: {len(curr_df.age_days)-curr_df.age_days.dropna().shape[0]} missing)":^50}')
+    print(f'\t{"avg":^8} +/- {"stddev":^8} [{"min":^8}-{"max":^8}] [{"median":^8}, {"q1":^8}, {"q3":^8}, {"iqr":^8}]')
+    print(f"Days\t{curr_df.age_days.mean():^8.2f} +/- {curr_df.age_days.std():^8.2f} [{curr_df.age_days.min():^8.2f}-{curr_df.age_days.max():^8.2f}] [{curr_df.age_days.median():^8.2f}, {curr_df.age_days.quantile(0.25):^8.2f}, {curr_df.age_days.quantile(0.75):^8.2f}, {curr_df.age_days.quantile(0.75) - curr_df.age_days.quantile(0.25):^8.2f}]")
+    print(f"Years\t{curr_df.age_years.mean():^8.3f} +/- {curr_df.age_years.std():^8.3f} [{curr_df.age_years.min():^8.3f}-{curr_df.age_years.max():^8.3f}] [{curr_df.age_years.median():^8.3f}, {curr_df.age_years.quantile(0.25):^8.3f}, {curr_df.age_years.quantile(0.75):^8.3f}, {curr_df.age_years.quantile(0.75) - curr_df.age_years.quantile(0.25):^8.3f}]")
+    print('-'*50)
+    print(f'{"GENDER SUMMARY":^50}')
+    print(f'{f"({curr_df.gender.dropna().shape[0]}/{len(curr_df.gender)}: {len(curr_df.gender)-curr_df.gender.dropna().shape[0]} missing)":^50}')
+    print(f"Male\t{curr_df.male.sum():>5.0f} ({curr_df.male.sum() / len(curr_df):.1%})")
+    print(f"Female\t{curr_df.female.sum():>5.0f} ({curr_df.female.sum() / len(curr_df):.1%})")
+    print('-'*50)
+    print(f'{"PIXEL SPACING SUMMARY":^50}')
+    print(f'{f"({curr_df.pixel_spacing.dropna().shape[0]}/{len(curr_df.pixel_spacing)}: {len(curr_df.pixel_spacing)-curr_df.pixel_spacing.dropna().shape[0]} missing)":^50}')
+    print(f'\t{"avg":^5} +/- {"stddev":^5} [{"min":^5}-{"max":^5}] [{"median":^5}, {"q1":^5}, {"q3":^5}, {"iqr":^5}]')
+    print(f"mm\t{curr_df.pixel_spacing.mean():^5.3f} +/- {curr_df.pixel_spacing.std():^5.3f}  [{curr_df.pixel_spacing.min():^5.3f}-{curr_df.pixel_spacing.max():^5.3f}] [{curr_df.pixel_spacing.median():>6.3f}, {curr_df.pixel_spacing.quantile(0.25):^5.3f}, {curr_df.pixel_spacing.quantile(0.75):^5.3f}, {curr_df.pixel_spacing.quantile(0.75) - curr_df.pixel_spacing.quantile(0.25):^5.3f}]")
+    print('-'*50)
+    print(f'{"MANUFACTURER SUMMARY":^50}')
+    print(f'{f"({curr_df.manufacturer.dropna().shape[0]}/{len(curr_df.manufacturer)}: {len(curr_df.manufacturer)-curr_df.manufacturer.dropna().shape[0]} missing)":^50}')
+    print(f"Philips\t{curr_df[curr_df.manufacturer == 'Philips'].shape[0]:>5.0f} ({curr_df[curr_df.manufacturer == 'Philips'].shape[0] / len(curr_df):>5.1%})")
+    print(f"Canon\t{curr_df[curr_df.manufacturer == 'Canon'].shape[0]:>5.0f} ({curr_df[curr_df.manufacturer == 'Canon'].shape[0] / len(curr_df):>5.1%})")
+    print(f"Fuji\t{curr_df[curr_df.manufacturer == 'Fuji'].shape[0]:>5.0f} ({curr_df[curr_df.manufacturer == 'Fuji'].shape[0] / len(curr_df):>5.1%})")
+    print(f"Kodak\t{curr_df[curr_df.manufacturer == 'Kodak'].shape[0]:>5.0f} ({curr_df[curr_df.manufacturer == 'Kodak'].shape[0] / len(curr_df):>5.1%})")
+    print(f"GE\t{curr_df[curr_df.manufacturer == 'GE'].shape[0]:>5.0f} ({curr_df[curr_df.manufacturer == 'GE'].shape[0] / len(curr_df):>5.1%})")
+    print(f"Other\t{curr_df[curr_df.manufacturer == 'Other'].shape[0]:>5.0f} ({curr_df[curr_df.manufacturer == 'Other'].shape[0] / len(curr_df):>5.1%})")
+    print()
 
-def main(parse_args):
-    """Main Function"""
+
+def extract_metadata(save_dir):
+    """
+    Go through all DICOM files and extract relevant metadata, and save to a CSV file.
+
+    Parameters
+    ----------
+    save_dir : str
+        Path to save dicom_metadata.csv to
+    """
+    # List of images from fracture absent dataset marked as containing 1+ fracture
     ignore_list = ['0006', '0010', '0071', '0080', '0088', '0099', '0101', '0117', '0139', '0161', '0170']
 
+    # Create lists of rib fracture datasets
     frac_present_list = sorted([os.path.join(root, file) for root, _, files in os.walk(ARGS['DICOM_FOLDER']) for file in files])
     unique_frac_present_list = {img[:img.rfind('_')]+'_0.dcm' for img in frac_present_list}
     frac_absent_list = [os.path.join(root, file) for root, _, files in os.walk(ARGS['ABSENT_DICOM_FOLDER']) for file in files if int(file[18:21]) < 201 and file[17:21] not in ignore_list]
     unique_frac_absent_list = {img[:img.rfind('_')]+'_1.dcm' for img in frac_absent_list}
+    combined = list(unique_frac_present_list) + list(unique_frac_absent_list)
 
-    present_ages = []
-    present_genders = np.array([])
-    pixel_spacings = np.array([])
+    # Initialize DataFrame
+    dicom_df = pd.DataFrame({'patient_id': [],
+                                'has_fractures': [],
+                                'age_days': [],
+                                'gender': [],
+                                'male': [],
+                                'female': [],
+                                'pixel_spacing': [],
+                                'manufacturer': []})
 
-    for i, image in enumerate(unique_frac_present_list):
-        if parse_args.break_loop and i == parse_args.break_num:
-            break
-        print_iter(len(unique_frac_present_list), i, 'Fracture Present DICOM')
-
-        dcm = dcmread(image)
-
-        if 'PatientAge' in dcm:
-            present_ages.append(dcm['PatientAge'].value)
-
-        if 'PatientSex' in dcm:
-            present_genders = np.append(present_genders, 1 if dcm['PatientSex'].value == 'M' else 0)
-
-        if 'PixelSpacing' in dcm:
-            pixel_spacings = np.append(pixel_spacings, dcm['PixelSpacing'].value[0])
-    print()
-
-    new_present_ages = np.array([])
-    for age in present_ages:
-        if age == '':
-            continue
-        new_age = age_to_days(age)
-        new_present_ages = np.append(new_present_ages, new_age)
-    present_ages_years = new_present_ages / 365.0
-
-
-
-    print()
-
-    print(f'{"FRACTURE PRESENT DATA":^{parse_args.width}}')
-    print('-'*parse_args.width)
-
-    print('Total DICOM Images:', len(frac_present_list))
-    print('Total Unique Patients:', len(unique_frac_present_list))
-
-    print('-'*parse_args.width)
-
-    print(f'{"Age Summary":^{parse_args.width}}')
-    print(f'{f"({len(present_ages)}/{len(unique_frac_present_list)}: {len(unique_frac_present_list)-len(present_ages)} missing)":^{parse_args.width}}')
-    print()
-    print(f'\t avg +/- std. dev. [min - max] [median, Q1, Q3, IQR]')
-    print(f'Days: {new_present_ages.mean():^.2f} +/- {new_present_ages.std():.2f} ' \
-          f'[{new_present_ages.min()} - {new_present_ages.max()}] ' \
-          f'[{np.median(new_present_ages):.1f}, ' \
-          f'{np.percentile(new_present_ages, 25)}, {np.percentile(new_present_ages, 75)}, {np.percentile(new_present_ages, 75) - np.percentile(new_present_ages, 25)}]')
-    print(f'Years: {present_ages_years.mean():^.3f} +/- {present_ages_years.std():.3f} ' \
-          f'[{present_ages_years.min():.3f} - {present_ages_years.max():.3f}] ' \
-          f'[{np.median(present_ages_years):.3f}, ' \
-          f'{np.percentile(present_ages_years, 25):.3f}, {np.percentile(present_ages_years, 75):.3f}, {np.percentile(present_ages_years, 75) - np.percentile(present_ages_years, 25):.3f}]')
-
-    print('-'*parse_args.width)
-
-    print(f'{"Gender Summary":^{parse_args.width}}')
-    print(f'{f"({len(present_genders)}/{len(unique_frac_present_list)}: {len(unique_frac_present_list)-len(present_genders)} missing)":^{parse_args.width}}')
-    print()
-    print(f'Male: {present_genders.sum():.0f} ({present_genders.sum()/len(present_genders):.1%})')
-    print(f'Female: {len(present_genders)-present_genders.sum():.0f} ({(len(present_genders)-present_genders.sum())/len(present_genders):.1%})')
-
-    print('-'*parse_args.width)
-
-    print(f'{"Pixel Spacing Summary":^{parse_args.width}}')
-    print(f'{f"({len(pixel_spacings)}/{len(unique_frac_present_list)}: {len(unique_frac_present_list)-len(pixel_spacings)} missing)":^{parse_args.width}}')
-    print()
-    print(f'\tavg +/- std. dev. [min - max], median')
-    print(f'mm: {pixel_spacings.mean():^.3f} +/- {pixel_spacings.std():.3f} [{pixel_spacings.min():.3f} - {pixel_spacings.max():.3f}], {np.median(pixel_spacings):.3f}')
-
-    print('-'*parse_args.width)
-    print()
-
-
-
-
-
-
-    present_ages = []
-    present_genders = np.array([])
-    pixel_spacings = np.array([])
-
-    for i, image in enumerate(unique_frac_absent_list):
-        if parse_args.break_loop and i == parse_args.break_num:
-            break
-        print_iter(len(unique_frac_absent_list), i, 'Fracture Present DICOM')
+    pbar = tqdm(enumerate(combined), total=len(combined), desc='Processing DICOMs')
+    for i, image in pbar:
 
         dcm = dcmread(image)
 
-        if 'PatientAge' in dcm:
-            present_ages.append(dcm['PatientAge'].value)
-
-        if 'PatientSex' in dcm:
-            present_genders = np.append(present_genders, 1 if dcm['PatientSex'].value == 'M' else 0)
-
-        if 'PixelSpacing' in dcm:
-            pixel_spacings = np.append(pixel_spacings, dcm['PixelSpacing'].value[0])
-    print()
-
-    new_present_ages = np.array([])
-    for age in present_ages:
-        if age == '':
-            continue
-        new_age = age_to_days(age)
-        new_present_ages = np.append(new_present_ages, new_age)
-    present_ages_years = new_present_ages / 365.0
+        temp_age = age_to_days(dcm['PatientAge'].value) if 'PatientAge' in dcm else pd.NA
+        temp_frac = 'present' if 'anon_ib' in image.lower() else 'absent'
+        temp_gender = dcm['PatientSex'].value if 'PatientSex' in dcm else ''
+        temp_male = 1 if temp_gender == 'M' else 0
+        temp_female = 1 if temp_gender == 'F' else 0
+        temp_spacing = dcm['PixelSpacing'].value[0] if 'PixelSpacing' in dcm else pd.NA
+        temp_manu = simple_manufacturer(dcm['Manufacturer'].value) if 'Manufacturer' in dcm else ''
 
 
+        dicom_df = dicom_df.append({'patient_id': image,
+                                    'has_fractures': temp_frac,
+                                    'age_days': temp_age,
+                                    'gender': temp_gender,
+                                    'male': temp_male,
+                                    'female': temp_female,
+                                    'pixel_spacing': temp_spacing, 
+                                    'manufacturer': temp_manu}, ignore_index=True)
 
-    print()
+    # Add a column for age in years
+    dicom_df.insert(3, 'age_years', dicom_df['age_days'] / 365.0)
 
-    print(f'{"FRACTURE ABSENT DATA":^{parse_args.width}}')
-    print('-'*parse_args.width)
-
-    print('Total DICOM Images:', len(frac_absent_list))
-    print('Total Unique Patients:', len(unique_frac_absent_list))
-
-    print('-'*parse_args.width)
-
-    print(f'{"Age Summary":^{parse_args.width}}')
-    print(f'{f"({len(present_ages)}/{len(unique_frac_absent_list)}: {len(unique_frac_absent_list)-len(present_ages)} missing)":^{parse_args.width}}')
-    print()
-    print(f'\t avg +/- std. dev. [min - max] [median, Q1, Q3, IQR]')
-    print(f'Days: {new_present_ages.mean():^.2f} +/- {new_present_ages.std():.2f} ' \
-          f'[{new_present_ages.min():.0f} - {new_present_ages.max():.0f}] ' \
-          f'[{np.median(new_present_ages):.1f}, ' \
-          f'{np.percentile(new_present_ages, 25):.0f}, {np.percentile(new_present_ages, 75):.0f}, {np.percentile(new_present_ages, 75) - np.percentile(new_present_ages, 25):.0f}]')
-    print(f'Years: {present_ages_years.mean():^.3f} +/- {present_ages_years.std():.3f} ' \
-          f'[{present_ages_years.min():.3f} - {present_ages_years.max():.3f}] ' \
-          f'[{np.median(present_ages_years):.1f}, ' \
-          f'{np.percentile(present_ages_years, 25):.3f}, {np.percentile(present_ages_years, 75):.3f}, {np.percentile(present_ages_years, 75) - np.percentile(present_ages_years, 25):.3f}]')
-
-    print('-'*parse_args.width)
-
-    print(f'{"Gender Summary":^{parse_args.width}}')
-    print(f'{f"({len(present_genders)}/{len(unique_frac_absent_list)}: {len(unique_frac_absent_list)-len(present_genders)} missing)":^{parse_args.width}}')
-    print()
-    print(f'Male: {present_genders.sum():.0f} ({present_genders.sum()/len(present_genders):.1%})')
-    print(f'Female: {len(present_genders)-present_genders.sum():.0f} ({(len(present_genders)-present_genders.sum())/len(present_genders):.1%})')
-
-    print('-'*parse_args.width)
-
-    print(f'{"Pixel Spacing Summary":^{parse_args.width}}')
-    print(f'{f"({len(pixel_spacings)}/{len(unique_frac_absent_list)}: {len(unique_frac_absent_list)-len(pixel_spacings)} missing)":^{parse_args.width}}')
-    print()
-    print(f'\tavg +/- std. dev. [min - max], median')
-    print(f'mm: {pixel_spacings.mean():.3f} +/- {pixel_spacings.std():.3f} [{pixel_spacings.min():.3f} - {pixel_spacings.max():.3f}], {np.median(pixel_spacings):.3f}')
-
-    print('-'*parse_args.width)
-    print()
+    # Save DataFrame to file
+    print('Writing to file...')
+    dicom_df.to_csv(os.path.join(save_dir, 'dicom_metadata.csv'), index=False)
 
 
+def main(parse_args):
+    """Main Function"""
+
+    if parse_args.extract:
+        extract_metadata(parse_args.save_dir)
+
+    if parse_args.summary:
+        dicom_df = pd.read_csv(os.path.join(parse_args.save_dir, 'dicom_metadata.csv'))
+        print_summary(dicom_df, dataset=parse_args.fractures)
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Print out patient statistics of the DICOM dataset.')
+
+    parser.add_argument('--extract', action='store_true',
+                        help='Extract metadata from the DICOM files.')
+
+    parser.add_argument('--summary', action='store_true',
+                        help='Print out summary of the stored CSV data.')
 
     parser.add_argument('--break_loop', action='store_true',
                         help='Break the loop.')
@@ -205,9 +199,11 @@ if __name__ == "__main__":
     parser.add_argument('--break_num', type=int, default=5,
                         help='Iteration to break the loop.')
 
-    parser.add_argument('--width', type=int, default=50,
-                        help='Max width of printouts.')
+    parser.add_argument('--fractures', type=str, default=None,
+                        help='Determine what section of data is used for summary (choose one of present or absent).')
 
+    parser.add_argument('--save_dir', default=ARGS['PROCESSED_DATA_FOLDER'],
+                        help='Directory to save metadata CSV (default is newest processed folder).')
 
     parser_args = parser.parse_args()
 
