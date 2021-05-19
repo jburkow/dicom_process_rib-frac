@@ -12,7 +12,6 @@ import os
 import time
 
 from tqdm import tqdm
-import numpy as np
 import pandas as pd
 from pydicom import dcmread
 
@@ -63,6 +62,7 @@ def simple_manufacturer(manufacturer):
     # If none of the previous conditions are met, return "Other"
     return 'Other'
 
+
 def print_summary(dicom_df, dataset=None):
     """
     Print out summary of metadata from the saved CSV file.
@@ -81,6 +81,8 @@ def print_summary(dicom_df, dataset=None):
     else:
         header_str = 'FRACTURE DATASET SUMMARY'
         curr_df = dicom_df
+
+    curr_df['manufacturer'] = curr_df['vendor'].apply(lambda x: simple_manufacturer(x))
 
     print(f"{header_str:^50}")
     print('-'*50)
@@ -110,6 +112,7 @@ def print_summary(dicom_df, dataset=None):
     print(f"Kodak\t{curr_df[curr_df.manufacturer == 'Kodak'].shape[0]:>5.0f} ({curr_df[curr_df.manufacturer == 'Kodak'].shape[0] / len(curr_df):>5.1%})")
     print(f"GE\t{curr_df[curr_df.manufacturer == 'GE'].shape[0]:>5.0f} ({curr_df[curr_df.manufacturer == 'GE'].shape[0] / len(curr_df):>5.1%})")
     print(f"Other\t{curr_df[curr_df.manufacturer == 'Other'].shape[0]:>5.0f} ({curr_df[curr_df.manufacturer == 'Other'].shape[0] / len(curr_df):>5.1%})")
+    print(f"Unique Vendors: {curr_df.vendor.unique()}")
     print()
 
 
@@ -134,13 +137,13 @@ def extract_metadata(save_dir):
 
     # Initialize DataFrame
     dicom_df = pd.DataFrame({'patient_id': [],
-                                'has_fractures': [],
-                                'age_days': [],
-                                'gender': [],
-                                'male': [],
-                                'female': [],
-                                'pixel_spacing': [],
-                                'manufacturer': []})
+                             'has_fractures': [],
+                             'age_days': [],
+                             'gender': [],
+                             'male': [],
+                             'female': [],
+                             'pixel_spacing': [],
+                             'vendor': []})
 
     pbar = tqdm(enumerate(combined), total=len(combined), desc='Processing DICOMs')
     for i, image in pbar:
@@ -153,7 +156,7 @@ def extract_metadata(save_dir):
         temp_male = 1 if temp_gender == 'M' else 0
         temp_female = 1 if temp_gender == 'F' else 0
         temp_spacing = dcm['PixelSpacing'].value[0] if 'PixelSpacing' in dcm else pd.NA
-        temp_manu = simple_manufacturer(dcm['Manufacturer'].value) if 'Manufacturer' in dcm else ''
+        temp_manu = dcm['Manufacturer'].value if 'Manufacturer' in dcm else ''
 
 
         dicom_df = dicom_df.append({'patient_id': image,
@@ -163,7 +166,7 @@ def extract_metadata(save_dir):
                                     'male': temp_male,
                                     'female': temp_female,
                                     'pixel_spacing': temp_spacing, 
-                                    'manufacturer': temp_manu}, ignore_index=True)
+                                    'vendor': temp_manu}, ignore_index=True)
 
     # Add a column for age in years
     dicom_df.insert(3, 'age_years', dicom_df['age_days'] / 365.0)
