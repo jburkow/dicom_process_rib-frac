@@ -2,7 +2,7 @@
 Filename: dicom_utils.py
 Authors: Jonathan Burkow (burkowjo@msu.edu), Michigan State University
          Greg Holste (giholste@gmail.com), UT Austin
-Last Updated: 09/03/2021
+Last Updated: 09/27/2021
 Description: A collection of utility functions needed to process through DICOM files, including
     thresholding, cropping, histogram qualization, and saving to PNGs.
 '''
@@ -18,20 +18,18 @@ import numpngw
 import pydicom
 from ChestSeg_PyTorch.utils import postprocess
 from ChestSeg_PyTorch.preprocess import to_one_hot
-from general_utils import plot_image
 
 # Globally define U-Net output classes
 CLASSES = ['background', 'spine', 'mediastinum', 'left_lung', 'right_lung', 'left_subdiaphragm', 'right_subdiaphragm']
 
 
-def load_dicom_image(dicom_file: pydicom.dataset.Dataset, verbose: bool = False) -> np.ndarray:
+def load_dicom_image(dicom_file: pydicom.dataset.Dataset) -> np.ndarray:
     """
     Load in the image array from the dicom file.
 
     Parameters
     ----------
     dicom_file : the DICOM file read in by PyDicom
-    verbose    : If True, print out the original image
 
     Returns
     -------
@@ -51,17 +49,9 @@ def load_dicom_image(dicom_file: pydicom.dataset.Dataset, verbose: bool = False)
 
     # Retrieve pixel intensity data from the dicom file
     # Rescale array values to ensure pixel intensities reflect original data
-    try:
-        slope = float(dicom_file.RescaleSlope)
-        intercept = float(dicom_file.RescaleIntercept)
-    except:
-        slope = 1.0
-        intercept = 0.0
+    slope = dicom_file.RescaleSlope if hasattr(dicom_file, 'RescaleSlope') else 1.0
+    intercept = dicom_file.RescaleIntercept if hasattr(dicom_file, 'RescaleIntercept') else 0.0
     image = slope * image + intercept
-
-    # Plot the image from the dicom file
-    if verbose:
-        plot_image(image, title='Original Image')
 
     return image.astype(float)
 
@@ -78,15 +68,14 @@ def invert_image(image: np.ndarray) -> np.ndarray:
     return np.invert(image) - np.invert(image).min()
 
 
-def threshold_image(image: np.ndarray, method: str = 'li', verbose: bool = False) -> np.ndarray:
+def threshold_image(image: np.ndarray, method: str = 'li') -> np.ndarray:
     """
     Use scikit-image filters to threshold image array (set all values below a certain value to zero)
 
     Parameters
     ----------
-    image   : array of the DICOM image
-    method  : the method of thresholding to use
-    verbose : If True, print out the thresholded image
+    image  : array of the DICOM image
+    method : the method of thresholding to use
 
     Returns
     -------
@@ -104,14 +93,10 @@ def threshold_image(image: np.ndarray, method: str = 'li', verbose: bool = False
     # Threshold the image
     image[image < threshold] = 0
 
-    # Plot the current stage of the image
-    if verbose:
-        plot_image(image, title='Thresholded Image')
-
     return image
 
 
-def rough_crop(image: np.ndarray, blank_dist: int = 20, verbose: bool = False) -> Tuple[np.ndarray, Tuple[int, int, int, int]]:
+def rough_crop(image: np.ndarray, blank_dist: int = 20) -> Tuple[np.ndarray, Tuple[int, int, int, int]]:
     """
     The first stage of cropping for processing DICOM images. Takes in numpy array representation of
     DICOM image, crops array based on row/column sums with nonzero elements. Outputs the x and y
@@ -121,7 +106,6 @@ def rough_crop(image: np.ndarray, blank_dist: int = 20, verbose: bool = False) -
     ----------
     image      : array of the DICOM image
     blank_dist : distance between nonzero indices to determine crop boundaries
-    verbose    : If True, print out the cropped image
 
     Returns
     -------
@@ -184,11 +168,6 @@ def rough_crop(image: np.ndarray, blank_dist: int = 20, verbose: bool = False) -
 
     # Crop the original image based on rough crop indices
     image = image[top:bottom, left:right]
-
-    # Plot the current stage of the image and print crop indices
-    if verbose:
-        print('Initial Crop:', indices)
-        plot_image(image, title='Initial Crop')
 
     return image, indices
 
@@ -280,7 +259,7 @@ def quadrant_indices(quadrant_array: np.ndarray,
             return quad_width
 
 
-def get_quad_crop_offsets(image: np.ndarray, verbose: bool = False) -> Tuple[int, int, int, int]:
+def get_quad_crop_offsets(image: np.ndarray) -> Tuple[int, int, int, int]:
     """
     Second stage option of cropping DICOM image by splitting the array into quadrants and looking at
     empty space within each. After indices are found from each quadrant, the tightest bounds are
@@ -289,11 +268,10 @@ def get_quad_crop_offsets(image: np.ndarray, verbose: bool = False) -> Tuple[int
     Parameters
     ----------
     image   : array of the DICOM image after initial crop
-    verbose : If True, print out the index offsets using quadrant cropping
 
     Returns
     -------
-    offsets : pixel offsets to constrict after rough crop; (top, bottom, left, right)
+    pixel offsets to constrict after rough crop; (top, bottom, left, right)
     """
     # Get the height and width of the quadrants
     quad_h, quad_w = image.shape[0]//2, image.shape[1]//2
@@ -324,17 +302,10 @@ def get_quad_crop_offsets(image: np.ndarray, verbose: bool = False) -> Tuple[int
     left_bound = int(max(tl_left_bound, bl_left_bound))
     right_bound = int(image.shape[1] - (min(tr_right_bound, br_right_bound) + quad_w))
 
-    # Store the offsets
-    offsets = (top_bound, bottom_bound, left_bound, right_bound)
-
-    # Print second stage crop offsets
-    if verbose:
-        print('Quadrant crop offsets:', offsets)
-
-    return offsets
+    return top_bound, bottom_bound, left_bound, right_bound
 
 
-def get_center_crop_offsets(image: np.ndarray, verbose: bool = False) -> Tuple[int, int, int, int]:
+def get_center_crop_offsets(image: np.ndarray) -> Tuple[int, int, int, int]:
     """
     Second stage option of cropping the DICOM image by looking at the middle 50% region of the
     image, splitting it into left and right sections, and finding empty space within each.
@@ -343,12 +314,11 @@ def get_center_crop_offsets(image: np.ndarray, verbose: bool = False) -> Tuple[i
 
     Parameters
     ----------
-    image   : array of the DICOM image after initial crop
-    verbose : If True, print out the index offsets using center cropping
+    image : array of the DICOM image after initial crop
 
     Returns
     -------
-    offsets : pixel offsets to constrict after rough crop; (top, bottom, left, right)
+    pixel offsets to constrict after rough crop; (top, bottom, left, right)
     """
     # Get the height and width of the center region
     center_h, center_w = image.shape[0]//2, image.shape[1]//2
@@ -382,14 +352,7 @@ def get_center_crop_offsets(image: np.ndarray, verbose: bool = False) -> Tuple[i
     left_bound = int(left_bound)
     right_bound = int(image.shape[1] - (right_bound + center_w))
 
-    # Store the offsets
-    offsets = (top_bound, bottom_bound, left_bound, right_bound)
-
-    # Print second stage crop offsets
-    if verbose:
-        print('Center crop offsets:', offsets)
-
-    return offsets
+    return top_bound, bottom_bound, left_bound, right_bound
 
 
 def get_unet_offsets(cat_mask: np.ndarray) -> Tuple[int, int, int, int]:
@@ -413,7 +376,7 @@ def get_unet_offsets(cat_mask: np.ndarray) -> Tuple[int, int, int, int]:
     left_offset = fg_indices[1].min()
     right_offset = cat_mask.shape[1] - fg_indices[1].max() + 1
 
-    return (top_offset, bottom_offset, left_offset, right_offset)
+    return top_offset, bottom_offset, left_offset, right_offset
 
 
 def unet_crop(image: np.ndarray,
@@ -497,29 +460,25 @@ def crop_dicom(image: np.ndarray,
     orig_image_shape = image.shape
 
     # Threshold the image copy for improved cropping
-    image_copy = threshold_image(image_copy, method='li', verbose=verbose)
+    image_copy = threshold_image(image_copy, method='li')
 
     # Get the indices for the rough crop stage
-    image_copy, init_crop = rough_crop(image_copy, verbose=verbose)
+    image_copy, init_crop = rough_crop(image_copy)
 
     # Get the index offsets from the region crop stage or U-Net segmentation
     if model is not None:
         cat_y_pred, region_offsets = unet_crop(image_copy, model, device, verbose=verbose)
     else:
         if crop_region == 'quad':
-            region_offsets = get_quad_crop_offsets(image_copy, verbose=verbose)
+            region_offsets = get_quad_crop_offsets(image_copy)
         elif crop_region == 'center':
-            region_offsets = get_center_crop_offsets(image_copy, verbose=verbose)
+            region_offsets = get_center_crop_offsets(image_copy)
 
     # Calculate rough crop + unet/region crop indices
     indices = (max(0, init_crop[0] + region_offsets[0]),
                min(image.shape[0], init_crop[1] - region_offsets[1]),
                max(0, init_crop[2] + region_offsets[2]),
                min(image.shape[1], init_crop[3] - region_offsets[3]))
-
-    # Plot the final cropped image
-    if verbose:
-        plot_image(image, title='Final Cropped Image')
 
     if model is not None:
         # Pad pred array with zeros based on rough crop indices to match original image shape
@@ -596,8 +555,7 @@ def scale_image_to_depth(image: np.ndarray, bit_depth: int) -> np.ndarray:
 
 def hist_equalization(image: np.ndarray,
                       method: str = 'hand',
-                      bit_depth: int = 16,
-                      verbose: bool = False) -> np.ndarray:
+                      bit_depth: int = 16) -> np.ndarray:
     """
     Perform histogram equalization on the input image, dependent on the method chosen. OpenCV
     requires the image to be 8-bit, and skimage outputs an array with values between [0,1].
@@ -607,7 +565,6 @@ def hist_equalization(image: np.ndarray,
     image     : array of the image
     method    : method to perform histogram equalization; (choices: 'opencv', 'skimage', 'hand')
     bit_depth : max bit depth of the array to equalize to; only used if method=='hand'
-    verbose   : If True, print out the equalized image
 
     Returns
     -------
@@ -643,10 +600,6 @@ def hist_equalization(image: np.ndarray,
         hist_eq_img = np.interp(image.flatten(), bins[:-1], eq)
         # Reshape the array to the original shape
         hist_eq_img = hist_eq_img.reshape(image.shape)
-
-    # Plot the histogram equalized image
-    if verbose:
-        plot_image(hist_eq_img, title='Histogram Equalized Image')
 
     return hist_eq_img
 
