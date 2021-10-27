@@ -47,6 +47,7 @@ def retrieve_all_attributes(dicom_list: List[str], attribute) -> List[str]:
 
 
 def main():
+    """Main Function"""
     frac_pres_dir = '/mnt/home/burkowjo/midi_lab/burkowjo_data/fracture_present_1Feb2020'
     frac_abs_dir = '/mnt/home/burkowjo/midi_lab/matched_fractureabsent_19Nov2020'
     frac_pres2_dir = '/mnt/home/burkowjo/midi_lab/burkowjo_data/fracture_present_8June2021'
