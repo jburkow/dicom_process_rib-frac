@@ -41,7 +41,7 @@ def retrieve_all_attributes(dicom_list: List[str], attribute) -> List[str]:
     all_attrs = []
     for _, dicom in tqdm(enumerate(dicom_list), desc=f'Getting all unique attributes - {attribute}', total=len(dicom_list)):
         dcm = pydicom.dcmread(dicom)
-        tmp_attr = dcm.BodyPartExamined if hasattr(dcm, attribute) else 'NA'
+        tmp_attr = dcm.StudyDescription if hasattr(dcm, attribute) else 'NA'
         all_attrs.append(tmp_attr)
     return list(set(all_attrs))
 
@@ -71,13 +71,14 @@ def main():
 
 
     # attribute = 'PhotometricInterpretation'
-    attribute = 'BodyPartExamined'
+    # attribute = 'BodyPartExamined'
+    attribute = 'StudyDescription'
 
     unique_attrs = retrieve_all_attributes(all_dicoms, attribute)
 
-    print(f'Unique {attribute}')
+    print(f'--All Unique {attribute}s--')
     for attr in unique_attrs:
-        print(attr)
+        print(f'{attr!r}')
 
 
 if __name__ == "__main__":
@@ -89,6 +90,6 @@ if __name__ == "__main__":
     main()
 
     # Print out time to complete
-    print('Done!')
+    print('\nDone!')
     end_time = time.perf_counter()
     print(f'Execution finished in {end_time - start_time:.3f} seconds.\n')
