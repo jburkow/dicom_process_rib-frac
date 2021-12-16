@@ -79,6 +79,8 @@ def print_summary(dicom_df: pd.DataFrame, dataset: str = None):
 
     curr_df['manufacturer'] = curr_df['vendor'].apply(lambda x: simple_manufacturer(x))
 
+    outlier_df = curr_df[curr_df['age_days'] <= curr_df['age_days'].quantile(0.75) + 1.5 * (curr_df['age_days'].quantile(0.75) - curr_df['age_days'].quantile(0.25))]
+
     print()
     print(f"{header_str:^50}")
     print('='*50)
@@ -89,6 +91,12 @@ def print_summary(dicom_df: pd.DataFrame, dataset: str = None):
     print(f'\t{"avg":^8} +/- {"stddev":^8} [{"min":^8}-{"max":^8}] [{"median":^8}, {"q1":^8}, {"q3":^8}, {"iqr":^8}]')
     print(f"Days\t{curr_df.age_days.mean():^8.2f} +/- {curr_df.age_days.std():^8.2f} [{curr_df.age_days.min():^8.2f}-{curr_df.age_days.max():^8.2f}] [{curr_df.age_days.median():^8.2f}, {curr_df.age_days.quantile(0.25):^8.2f}, {curr_df.age_days.quantile(0.75):^8.2f}, {curr_df.age_days.quantile(0.75) - curr_df.age_days.quantile(0.25):^8.2f}]")
     print(f"Years\t{curr_df.age_years.mean():^8.3f} +/- {curr_df.age_years.std():^8.3f} [{curr_df.age_years.min():^8.3f}-{curr_df.age_years.max():^8.3f}] [{curr_df.age_years.median():^8.3f}, {curr_df.age_years.quantile(0.25):^8.3f}, {curr_df.age_years.quantile(0.75):^8.3f}, {curr_df.age_years.quantile(0.75) - curr_df.age_years.quantile(0.25):^8.3f}]")
+    print('='*50)
+    print(f'{"AGE SUMMARY (Outliers Removed)":^50}')
+    print(f'{f"({outlier_df.age_days.dropna().shape[0]}/{len(outlier_df.age_days)}: {len(outlier_df.age_days)-outlier_df.age_days.dropna().shape[0]} missing)":^50}')
+    print(f'\t{"avg":^8} +/- {"stddev":^8} [{"min":^8}-{"max":^8}] [{"median":^8}, {"q1":^8}, {"q3":^8}, {"iqr":^8}]')
+    print(f"Days\t{outlier_df.age_days.mean():^8.2f} +/- {outlier_df.age_days.std():^8.2f} [{outlier_df.age_days.min():^8.2f}-{outlier_df.age_days.max():^8.2f}] [{outlier_df.age_days.median():^8.2f}, {outlier_df.age_days.quantile(0.25):^8.2f}, {outlier_df.age_days.quantile(0.75):^8.2f}, {outlier_df.age_days.quantile(0.75) - outlier_df.age_days.quantile(0.25):^8.2f}]")
+    print(f"Years\t{outlier_df.age_years.mean():^8.3f} +/- {outlier_df.age_years.std():^8.3f} [{outlier_df.age_years.min():^8.3f}-{outlier_df.age_years.max():^8.3f}] [{outlier_df.age_years.median():^8.3f}, {outlier_df.age_years.quantile(0.25):^8.3f}, {outlier_df.age_years.quantile(0.75):^8.3f}, {outlier_df.age_years.quantile(0.75) - outlier_df.age_years.quantile(0.25):^8.3f}]")
     print('='*50)
     print(f'{"GENDER SUMMARY":^50}')
     print(f'{f"({curr_df.gender.dropna().shape[0]}/{len(curr_df.gender)}: {len(curr_df.gender)-curr_df.gender.dropna().shape[0]} missing)":^50}')
