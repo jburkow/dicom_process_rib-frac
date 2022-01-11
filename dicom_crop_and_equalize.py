@@ -2,12 +2,11 @@
 Filename: dicom_crop_and_equalize.py
 Author: Jonathan Burkow, burkowjo@msu.edu
         Michigan State University
-Last Updated: 04/27/2021
-Description: Loops through the list of DICOM files with image
-    information and crops the image, and performs histogram
-    equalization. Versions of the original, cropped, and equalized
-    images in both 8-bit depth and 16-bit depth are saved. CSV files
-    with the original and cropped annotation information are also saved.
+Last Updated: 11/13/2021
+Description: Loops through the list of DICOM files with image information and crops the image, and
+    performs histogram equalization. Versions of the original, cropped, and equalized images in both
+    8-bit depth and 16-bit depth are saved. CSV files with the original and cropped annotation
+    information are also saved.
 '''
 
 import argparse
@@ -16,13 +15,15 @@ import time
 import json
 import traceback
 import torch
+import numpy as np
 import pandas as pd
 from pydicom import dcmread
+from tqdm import tqdm
 from dicom_utils import (load_dicom_image, crop_dicom, hist_equalization, create_rgb,
                          scale_image_to_depth, save_to_png, save_to_npy, extract_bboxes)
 from args import ARGS
 from ChestSeg_PyTorch.models.UNet_3Plus import UNet_3Plus_DeepSup
-from general_utils import read_file, print_iter
+from general_utils import read_file
 
 
 def main(parse_args):
@@ -46,14 +47,12 @@ def main(parse_args):
     failed_list = []
     original_annotations = []
     offset_annotations = []
-    for i, file in enumerate(dataset_list):
+    for i, file in tqdm(enumerate(dataset_list), desc='Processing images', total=len(dataset_list)):
         # Break after a certain number of images, if desired
-        if parse_args.break_loop and i == parse_args.break_num:
+        if parse_args.break_loop and i >= parse_args.break_num:
             break
 
         try:
-            print_iter(len(dataset_list), i, 'image')
-
             # Grab Patient ID
             patient_id = file[file.rfind('/')+1:file.rfind('_')]
 
@@ -78,7 +77,8 @@ def main(parse_args):
             # If yes, get corresponding annotation info
             if dcm.SOPInstanceUID in instance_uids:
                 # Pull the corresponding annotation filename from annotation folder
-                annotation_filename = [fname for fname in os.listdir(ARGS['ANNOTATION_FOLDER']) if patient_id in fname]
+                annotation_filename = [fname for fname in os.listdir(ARGS['ANNOTATION_FOLDER'])
+                    if dcm.PatientID in fname or dcm.PatientName.components[0] in fname]
 
                 # Pull out annotation information
                 with open(os.path.join(ARGS['ANNOTATION_FOLDER'], annotation_filename[0])) as json_file:
@@ -94,9 +94,9 @@ def main(parse_args):
             original_image = load_dicom_image(dcm)
 
             if unet_model is not None:
-                pred_mask, offsets = crop_dicom(original_image, model=unet_model, device=device)
+                pred_mask, offsets = crop_dicom(dcm, model=unet_model, device=device)
             else:
-                offsets = crop_dicom(original_image, model=unet_model)
+                offsets = crop_dicom(dcm)
 
             # Compare crop indices to bounding boxes
             # If not in InstanceUIDs, keep crop indices the same
@@ -197,6 +197,8 @@ def main(parse_args):
             cropped_histeq_16bit_rgb = create_rgb(cropped_histeq_16bit)
 
             # Set the filenames for each image to save to
+            combined_numpy_path = os.path.join('/mnt/home/burkowjo/midi_lab/burkowjo_data/processed_fracture_present_1Feb2020_20210902/npz_files', patient_id + '.npz')
+
             original_8bit_path = os.path.join(ARGS['8_BIT_OG_IMAGE_FOLDER'], patient_id + '.png')
             original_histeq_8bit_path = os.path.join(ARGS['8_BIT_OG_HISTEQ_IMAGE_FOLDER'], patient_id + '.png')
             cropped_8bit_path = os.path.join(ARGS['8_BIT_CROP_IMAGE_FOLDER'], patient_id + '.png')
@@ -209,6 +211,9 @@ def main(parse_args):
 
             # Save the images to their respective folders
             if not parse_args.just_annos and not parse_args.no_save:
+                # Save multiple arrays into single npz file
+                np.savez(combined_numpy_path, orig=original_16bit, crop=cropped_16bit, seg_orig=pred_mask, seg_crop=cropped_pred_mask)
+
                 save_to_png(original_8bit_rgb, original_8bit_path, overwrite=parse_args.overwrite)
                 save_to_png(original_histeq_8bit_rgb, original_histeq_8bit_path, overwrite=parse_args.overwrite)
                 save_to_png(cropped_8bit_rgb, cropped_8bit_path, overwrite=parse_args.overwrite)
@@ -219,7 +224,7 @@ def main(parse_args):
                 save_to_png(cropped_16bit_rgb, cropped_16bit_path, overwrite=parse_args.overwrite)
                 save_to_png(cropped_histeq_16bit_rgb, cropped_histeq_16bit_path, overwrite=parse_args.overwrite)
 
-            # Set filename for cropped, processed segmentation mask
+            # Set filename for segmentation masks
             original_seg_mask_path = os.path.join(ARGS['ORIGINAL_MASK_FOLDER'], patient_id + '.npy')
             cropped_seg_mask_path = os.path.join(ARGS['CROPPED_MASK_FOLDER'], patient_id + '.npy')
 
@@ -228,11 +233,10 @@ def main(parse_args):
                 save_to_npy(pred_mask, original_seg_mask_path)
                 save_to_npy(cropped_pred_mask, cropped_seg_mask_path)
 
-        except Exception as e:
+        except Exception:
             print('')  # End print stream from loop
             print(traceback.format_exc())
             failed_list.append(patient_id)
-    print('')  # End print stream from loop
 
     # Print out failed-to-process images:
     if len(failed_list) > 0:
@@ -288,13 +292,13 @@ if __name__ == "__main__":
     parser_args = parser.parse_args()
 
     # Print out start of execution
-    print('Starting execution...')
+    print('\nStarting execution...')
     start_time = time.perf_counter()
 
     # Run main function
     main(parser_args)
 
     # Print out time to complete
-    print('Done!')
+    print('\nDone!')
     end_time = time.perf_counter()
-    print('Execution finished in {} seconds.'.format(round(end_time - start_time, 3)))
+    print(f'Execution finished in {end_time - start_time:.3f} seconds.\n')
