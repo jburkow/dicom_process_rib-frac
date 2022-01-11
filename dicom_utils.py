@@ -2,7 +2,7 @@
 Filename: dicom_utils.py
 Authors: Jonathan Burkow (burkowjo@msu.edu), Michigan State University
          Greg Holste (giholste@gmail.com), UT Austin
-Last Updated: 09/27/2021
+Last Updated: 01/10/2022
 Description: A collection of utility functions needed to process through DICOM files, including
     thresholding, cropping, histogram qualization, and saving to PNGs.
 '''
@@ -431,7 +431,7 @@ def unet_crop(image: np.ndarray,
     return cat_y_pred, offsets
 
 
-def crop_dicom(image: np.ndarray,
+def crop_dicom(dicom_file: pydicom.Dataset,
                verbose: bool = False,
                crop_region: str = 'center',
                model: torch.nn.Module = None,
@@ -444,7 +444,7 @@ def crop_dicom(image: np.ndarray,
 
     Parameters
     ----------
-    image       :  array of the original DICOM image
+    dicom_file  : DICOM structure of the current image
     verbose     : If True, print out each stage of image processing steps
     crop_region : determines second stage of cropping if model is None; (choice: quadrant, center)
     model       : PyTorch U-Net model; use segmentation instead of region crop for second crop stage
@@ -456,23 +456,27 @@ def crop_dicom(image: np.ndarray,
     indices : the pixel offsets needed to adjust annotations; (top, bottom, left, right)
     """
     # Make a copy of the image to modify
+    image = load_dicom_image(dicom_file)
     image_copy = image.copy()
     orig_image_shape = image.shape
 
     # Threshold the image copy for improved cropping
-    image_copy = threshold_image(image_copy, method='li')
+    if 'fracture_unknown_0436' not in dicom_file.PatientName:
+        image_copy = threshold_image(image_copy, method='li')
 
-    # Get the indices for the rough crop stage
-    image_copy, init_crop = rough_crop(image_copy)
+        # Get the indices for the rough crop stage
+        image_copy, init_crop = rough_crop(image_copy)
+    else: # 0436 is an outlier surrounded by white, messes up thresholding and thus the cropping
+        init_crop = (1150, 2560, 0, 1250)
+        image_copy = image[init_crop[0]:init_crop[1], init_crop[2]:init_crop[3]]
 
     # Get the index offsets from the region crop stage or U-Net segmentation
     if model is not None:
         cat_y_pred, region_offsets = unet_crop(image_copy, model, device, verbose=verbose)
-    else:
-        if crop_region == 'quad':
-            region_offsets = get_quad_crop_offsets(image_copy)
-        elif crop_region == 'center':
-            region_offsets = get_center_crop_offsets(image_copy)
+    elif crop_region == 'center':
+        region_offsets = get_center_crop_offsets(image_copy)
+    elif crop_region == 'quad':
+        region_offsets = get_quad_crop_offsets(image_copy)
 
     # Calculate rough crop + unet/region crop indices
     indices = (max(0, init_crop[0] + region_offsets[0]),
