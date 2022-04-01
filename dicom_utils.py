@@ -1,39 +1,49 @@
 '''
 Filename: dicom_utils.py
-Authors: Jonathan Burkow (burkowjo@msu.edu), Michigan State University
-         Greg Holste (giholste@gmail.com), UT Austin
-Last Updated: 01/10/2022
+Author(s): Jonathan Burkow, burkowjo@msu.edu, Michigan State University
+           Greg Holste, giholste@gmail.com, UT Austin
+Last Updated: 03/31/2022
 Description: A collection of utility functions needed to process through DICOM files, including
     thresholding, cropping, histogram qualization, and saving to PNGs.
 '''
 
-import os
-from typing import List, Tuple, Dict
 import math
+import os
+from typing import Dict, List, Tuple
+
 import cv2
-import torch
-import numpy as np
-from skimage import exposure, color, filters
 import numpngw
+import numpy as np
 import pydicom
-from ChestSeg_PyTorch.utils import postprocess
+import torch
+from skimage import color, exposure, filters
+
 from ChestSeg_PyTorch.preprocess import to_one_hot
+from ChestSeg_PyTorch.utils import postprocess
 
 # Globally define U-Net output classes
 CLASSES = ['background', 'spine', 'mediastinum', 'left_lung', 'right_lung', 'left_subdiaphragm', 'right_subdiaphragm']
 
 
+def invert_image(image: np.ndarray) -> np.ndarray:
+    """
+    If image has reversed intensity values (i.e., values close to 0 appear white and higher appear
+    black) invert array values so values close to 0 appear black and higher appear white.
+
+    Notes
+    -----
+    Subtracting by the min value retains the same value range as the original image.
+    """
+    return np.invert(image) - np.invert(image).min()
+
+
 def load_dicom_image(dicom_file: pydicom.dataset.Dataset) -> np.ndarray:
     """
-    Load in the image array from the dicom file.
+    Load in image from the DICOM file, apply necessary scaling, and return array.
 
     Parameters
     ----------
     dicom_file : the DICOM file read in by PyDicom
-
-    Returns
-    -------
-    image : the DICOM image in array form
     """
     # Pull out the image array from the dicom file.
     # Depending on DICOM Photometric Interpretation value, invert the image.
@@ -56,19 +66,10 @@ def load_dicom_image(dicom_file: pydicom.dataset.Dataset) -> np.ndarray:
     return image.astype(float)
 
 
-def invert_image(image: np.ndarray) -> np.ndarray:
-    """
-    If image has reversed intensity values (i.e., values close to 0 appear white and higher appear
-    black) invert array values so values close to 0 appear black and higher appear white.
-
-    Notes
-    -----
-    Subtracting by the min value retains the same value range as the original image.
-    """
-    return np.invert(image) - np.invert(image).min()
-
-
-def threshold_image(image: np.ndarray, method: str = 'li') -> np.ndarray:
+def threshold_image(
+        image: np.ndarray,
+        method: str = 'li'
+    ) -> np.ndarray:
     """
     Use scikit-image filters to threshold image array (set all values below a certain value to zero)
 
@@ -96,7 +97,10 @@ def threshold_image(image: np.ndarray, method: str = 'li') -> np.ndarray:
     return image
 
 
-def rough_crop(image: np.ndarray, blank_dist: int = 20) -> Tuple[np.ndarray, Tuple[int, int, int, int]]:
+def rough_crop(
+        image: np.ndarray,
+        blank_dist: int = 20
+    ) -> Tuple[np.ndarray, Tuple[int, int, int, int]]:
     """
     The first stage of cropping for processing DICOM images. Takes in numpy array representation of
     DICOM image, crops array based on row/column sums with nonzero elements. Outputs the x and y
@@ -172,11 +176,13 @@ def rough_crop(image: np.ndarray, blank_dist: int = 20) -> Tuple[np.ndarray, Tup
     return image, indices
 
 
-def quadrant_indices(quadrant_array: np.ndarray,
-                     quad_height: int,
-                     quad_width: int,
-                     quadrant: str,
-                     sum_threshold: float = 0.10) -> Tuple[int, int]:
+def quadrant_indices(
+        quadrant_array: np.ndarray,
+        quad_height: int,
+        quad_width: int,
+        quadrant: str,
+        sum_threshold: float = 0.10
+    ) -> Tuple[int, int]:
     """
     For a given quadrant of the image array, return corresponding indices for the boundaries
     obtained for the second stage of cropping.
@@ -379,15 +385,16 @@ def get_unet_offsets(cat_mask: np.ndarray) -> Tuple[int, int, int, int]:
     return top_offset, bottom_offset, left_offset, right_offset
 
 
-def unet_crop(image: np.ndarray,
-              model: torch.nn.Module,
-              device: torch.device,
-              verbose: bool = False) -> Tuple[np.ndarray, Tuple[int, int, int, int]]:
+def unet_crop(
+        image: np.ndarray,
+        model: torch.nn.Module,
+        device: torch.device,
+        verbose: bool = False
+    ) -> Tuple[np.ndarray, Tuple[int, int, int, int]]:
     """
-    Second stage option of cropping the DICOM image by using a trained
-    U-Net network to find an instance segmentation of the thoracic
-    cavity and ribs and finding the smallest and largest indices of
-    those masks.
+    Second stage option of cropping the DICOM image by using a trained U-Net network to find an
+    instance segmentation of the thoracic cavity and ribs and finding the smallest and largest
+    indices of those masks.
 
     Parameters
     ----------
@@ -431,11 +438,13 @@ def unet_crop(image: np.ndarray,
     return cat_y_pred, offsets
 
 
-def crop_dicom(dicom_file: pydicom.Dataset,
-               verbose: bool = False,
-               crop_region: str = 'center',
-               model: torch.nn.Module = None,
-               device: torch.device = None) -> Tuple[np.ndarray, Tuple[int, int, int, int]]:
+def crop_dicom(
+        dicom_file: pydicom.Dataset,
+        verbose: bool = False,
+        crop_region: str = 'center',
+        model: torch.nn.Module = None,
+        device: torch.device = None
+    ) -> Tuple[np.ndarray, Tuple[int, int, int, int]]:
     """
     Full function to crop a DICOM image. The pixel array is cropped through two stages:
         1) a rough crop to center on the X-Ray
@@ -520,7 +529,11 @@ def create_rgb(image: np.ndarray) -> np.ndarray:
     return np.stack([image, image, image], axis=-1)
 
 
-def save_to_png(image_array: np.ndarray, save_loc: str, overwrite: bool = False) -> None:
+def save_to_png(
+        image_array: np.ndarray,
+        save_loc: str,
+        overwrite: bool = False
+    ) -> None:
     """
     Save the image array to a RGB PNG file.
 
@@ -534,9 +547,12 @@ def save_to_png(image_array: np.ndarray, save_loc: str, overwrite: bool = False)
         numpngw.write_png(save_loc, image_array)
 
 
-def scale_image_to_depth(image: np.ndarray, bit_depth: int) -> np.ndarray:
+def scale_image_to_depth(
+        image: np.ndarray,
+        bit_depth: int
+    ) -> np.ndarray:
     """
-    Takes the input image array and scales the  values to the specified bit depth.
+    Takes the input image array and scales the values to the specified bit depth.
 
     Parameters
     ----------
@@ -557,12 +573,14 @@ def scale_image_to_depth(image: np.ndarray, bit_depth: int) -> np.ndarray:
         return image.astype('uint16')
 
 
-def hist_equalization(image: np.ndarray,
-                      method: str = 'hand',
-                      bit_depth: int = 16) -> np.ndarray:
+def hist_equalization(
+        image: np.ndarray,
+        method: str = 'hand',
+        bit_depth: int = 16
+    ) -> np.ndarray:
     """
     Perform histogram equalization on the input image, dependent on the method chosen. OpenCV
-    requires the image to be 8-bit, and skimage outputs an array with values between [0,1].
+    requires the image to be 8-bit. Sk-image outputs an array with values between [0,1].
 
     Parameters
     ----------
