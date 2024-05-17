@@ -9,17 +9,16 @@ Description: A collection of utility functions needed to process through DICOM f
 
 import math
 import os
-from typing import Dict, List, Tuple
+from typing import Dict, List, Tuple, Union
 
 import cv2
 import numpngw
 import numpy as np
 import pydicom
 import torch
-from skimage import color, exposure, filters
-
 from ChestSeg_PyTorch.preprocess import to_one_hot
 from ChestSeg_PyTorch.utils import postprocess
+from skimage import color, exposure, filters
 
 # Globally define U-Net output classes
 CLASSES = ['background', 'spine', 'mediastinum', 'left_lung', 'right_lung', 'left_subdiaphragm', 'right_subdiaphragm']
@@ -182,7 +181,7 @@ def quadrant_indices(
         quad_width: int,
         quadrant: str,
         sum_threshold: float = 0.10
-    ) -> Tuple[int, int]:
+    ) -> Union[Tuple[int, int], int]:
     """
     For a given quadrant of the image array, return corresponding indices for the boundaries
     obtained for the second stage of cropping.
@@ -207,63 +206,34 @@ def quadrant_indices(
     row_binary = binary.sum(axis=1) > quad_width * sum_threshold
 
     if quadrant == 'topleft':
-        try:
-            left_bound = col_binary.nonzero()[0].min()
-        except:
-            left_bound = 0
-        try:
-            top_bound = row_binary.nonzero()[0].min()
-        except:
-            top_bound = 0
+        left_bound = col_binary.nonzero()[0].min(default=0)
+        top_bound = row_binary.nonzero()[0].min(default=0)
         return int(left_bound), int(top_bound)
 
     if quadrant == 'topright':
-        try:
-            right_bound = col_binary.nonzero()[0].max()
-        except:
-            right_bound = quad_width
-        try:
-            top_bound = row_binary.nonzero()[0].min()
-        except:
-            top_bound = 0
+        right_bound = col_binary.nonzero()[0].max(default=quad_width)
+        top_bound = row_binary.nonzero()[0].min(default=0)
         return int(right_bound), int(top_bound)
 
     if quadrant == 'bottomleft':
-        try:
-            left_bound = col_binary.nonzero()[0].min()
-        except:
-            left_bound = 0
-        try:
-            bottom_bound = row_binary.nonzero()[0].max()
-        except:
-            bottom_bound = quad_height
+        left_bound = col_binary.nonzero()[0].min(default=0)
+        bottom_bound = row_binary.nonzero()[0].max(default=quad_height)
         return int(left_bound), int(bottom_bound)
 
     if quadrant == 'bottomright':
-        try:
-            right_bound = col_binary.nonzero()[0].max()
-        except:
-            right_bound = quad_width
-        try:
-            bottom_bound = row_binary.nonzero()[0].max()
-        except:
-            bottom_bound = quad_height
+        right_bound = col_binary.nonzero()[0].max(default=quad_width)
+        bottom_bound = row_binary.nonzero()[0].max(default=quad_height)
         return int(right_bound), int(bottom_bound)
 
     if quadrant == 'centerleft':
-        try:
-            left_bound = np.where(col_binary == 0)[0][-1]
-            return int(left_bound)
-        except:
-            return 0
+        left_bound = np.where(col_binary == 0)[0][-1] if (col_binary == 0).any() else 0
+        return int(left_bound)
 
     if quadrant == 'centerright':
-        try:
-            right_bound = np.where(col_binary == 0)[0][0]
-            return int(right_bound)
-        except:
-            return quad_width
+        right_bound = np.where(col_binary == 0)[0][0] if (col_binary == 0).any() else quad_width
+        return int(right_bound)
 
+    return 0  # default return if none of the above quadrants are specified
 
 def get_quad_crop_offsets(image: np.ndarray) -> Tuple[int, int, int, int]:
     """
