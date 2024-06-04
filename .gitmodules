@@ -1,0 +1,3 @@
+[submodule "ChestSeg_PyTorch"]
+	path = ChestSeg_PyTorch
+	url = https://github.com/gholste/ChestSeg-PyTorch.git
