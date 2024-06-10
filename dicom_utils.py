@@ -206,23 +206,23 @@ def quadrant_indices(
     row_binary = binary.sum(axis=1) > quad_width * sum_threshold
 
     if quadrant == 'topleft':
-        left_bound = col_binary.nonzero()[0].min(default=0)
-        top_bound = row_binary.nonzero()[0].min(default=0)
+        left_bound = col_binary.nonzero()[0].min(initial=0)
+        top_bound = row_binary.nonzero()[0].min(initial=0)
         return int(left_bound), int(top_bound)
 
     if quadrant == 'topright':
-        right_bound = col_binary.nonzero()[0].max(default=quad_width)
-        top_bound = row_binary.nonzero()[0].min(default=0)
+        right_bound = col_binary.nonzero()[0].max(initial=quad_width)
+        top_bound = row_binary.nonzero()[0].min(initial=0)
         return int(right_bound), int(top_bound)
 
     if quadrant == 'bottomleft':
-        left_bound = col_binary.nonzero()[0].min(default=0)
-        bottom_bound = row_binary.nonzero()[0].max(default=quad_height)
+        left_bound = col_binary.nonzero()[0].min(initial=0)
+        bottom_bound = row_binary.nonzero()[0].max(initial=quad_height)
         return int(left_bound), int(bottom_bound)
 
     if quadrant == 'bottomright':
-        right_bound = col_binary.nonzero()[0].max(default=quad_width)
-        bottom_bound = row_binary.nonzero()[0].max(default=quad_height)
+        right_bound = col_binary.nonzero()[0].max(initial=quad_width)
+        bottom_bound = row_binary.nonzero()[0].max(initial=quad_height)
         return int(right_bound), int(bottom_bound)
 
     if quadrant == 'centerleft':
